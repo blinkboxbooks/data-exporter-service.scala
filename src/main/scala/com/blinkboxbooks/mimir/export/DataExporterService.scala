@@ -1,51 +1,83 @@
 package com.blinkboxbooks.mimir.export
 
-import org.apache.commons.dbcp.BasicDataSource
-import org.squeryl.{ SessionFactory, Session }
-import org.squeryl.adapters.MySQLAdapter
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.slf4j.Logging
+import org.apache.commons.dbcp.BasicDataSource
+import org.squeryl.{ SessionFactory, Session, Schema, Query, Table }
+import org.squeryl.adapters.MySQLAdapter
+import org.squeryl.PrimitiveTypeMode._
+import rx.lang.scala.Observable
+import scala.concurrent.{ Await, promise }
+import scala.concurrent.duration._
+import java.sql.Date
+import javax.sql.DataSource
+import java.util.concurrent.TimeUnit
 
 object DataExportingService extends App with Logging {
+
+  import DbUtils._
+  import Schemas._
 
   logger.info("Starting")
 
   val config = ConfigFactory.load("data-exporter-service")
+  val bufferSize = config.getInt("exporter.jdbc.batchsize")
+  implicit val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
 
-  // Configure reporting database that we'll be writing to.
-  val ds = new BasicDataSource
-  ds.setDriverClassName(config.getString("exporter.jdbc.driver"))
-  ds.setUrl(config.getString("exporter.jdbc.url"))
-  ds.setUsername(config.getString("exporter.jdbc.username"))
-  ds.setPassword(config.getString("exporter.jdbc.password"))
-  ds.setValidationQuery("SELECT 1")
-  configureThreadPoolParameters(ds)
-  // Fail early if there's a problem with the config.
-  ds.getConnection.close
+  // Configure datasources for reading and writing.
+  val shopDatasource = createDatasource("jdbc:mysql://localhost/shop", "gospoken", "gospoken")
+  val outputDatasource = createDatasource("jdbc:mysql://localhost/reporting", "gospoken", "gospoken")
 
-  // The global singleton session factory refers to the output database.
+  // The global singleton session factory (yuck) refers to the shop database.
+  // TODO: review this.
   SessionFactory.concreteFactory =
-    Some(() => Session.create(ds.getConnection(), new MySQLAdapter))
+    Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
+  SessionFactory.newSession.bindToCurrentThread
 
-  // TODO: Configure database(s) that we'll be querying.
+  withSession(outputDatasource)(implicit outputSession => {
 
-  implicit val dbTimeout = config.getInt("exporter.jdbc.timeout.s")
+    // Clear old snapshots.
+    using(outputSession) {
+      publishersOutput.deleteWhere(p => p.id isNotNull)
+      booksOutput.deleteWhere(b => b.id isNotNull)
+    }
 
-  // DAOs for input data.
-  // TODO
+    // Write new snapshots.
+    copyData(from(publisherData)(publisher => select(publisher)),
+      (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
+        pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
 
-  // DAOs for writing output data.
-  // TODO
+    copyData(from(bookData)(book => select(book)),
+      (b: Book) => {
+        new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
+          b.description, b.languageCode, b.numberOfSections)
+      }, booksOutput)
 
-  // Kick things off.
-  // TODO: schedule synch action with configured interval.
+  })
 
-  logger.info("Started")
+  /**
+   * Copy the results from the given Query to the given output table, converting objects
+   * using the given converter.
+   *
+   * Objects from the input query are streamed and written to the output database using
+   * batched writes, for performance.
+   */
+  def copyData[T1, T2](query: Query[T1], converter: (T1) => T2,
+    output: Table[T2])(implicit outputSession: Session, timeout: Duration) = {
+    val p = promise[Unit]
+    val observable = Observable.from(query)
+      .map(converter)
+      .buffer(bufferSize)
+      .doOnEach(entities => using(outputSession) { output.insert(entities) })
+      .doOnError(e => { p.failure(e); e.printStackTrace(System.err) })
+      .doOnCompleted(() => { p.success() })
 
-  private def configureThreadPoolParameters(datasource: BasicDataSource) = {
-    datasource.setMaxActive(10)
-    datasource.setMaxIdle(5)
-    datasource.setInitialSize(5)
+    logger.info(s"Executing data export to table ${output.name}")
+    observable.subscribe
+    Await.result(p.future, timeout)
+    logger.info(s"Completed data export to table ${output.name}")
   }
+
+  logger.info("Completed all tasks")
 
 }
