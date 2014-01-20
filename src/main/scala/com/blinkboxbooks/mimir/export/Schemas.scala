@@ -6,8 +6,8 @@ import org.squeryl.PrimitiveTypeMode._
 
 // Input objects.
 case class Book(id: String, publisherId: String, publicationDate: Date,
-  title: String, description: String, languageCode: String, numberOfSections: Int) {
-  def this() = this("", "", new Date(0), "", "", "", 0)
+  title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
+  def this() = this("", "", new Date(0), "", None, None, 0)
 }
 case class Publisher(id: Int, name: String, ebookDiscount: Int,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
@@ -16,8 +16,8 @@ case class Publisher(id: Int, name: String, ebookDiscount: Int,
 
 // Output objects.
 case class BookInfo(id: String, publisherId: String, publicationDate: Date,
-  title: String, description: String, languageCode: String, numberOfSections: Int) {
-  def this() = this("", "", new Date(0), "", "", "", 0)
+  title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
+  def this() = this("", "", new Date(0), "", None, None, 0)
 }
 case class PublisherInfo(id: Int, name: String, ebookDiscount: Int,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
@@ -28,7 +28,9 @@ object Schemas extends Schema {
 
   //  printDdl(str => println(str))
 
-  // Input schema defs.
+  // 
+  // Input schema definitions
+  //
   val bookData = table[Book]("dat_book")
   on(bookData)(b => declare(
     b.id is (named("isbn")),
@@ -44,7 +46,9 @@ object Schemas extends Schema {
     p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"))))
 
-  // Output schema defs.
+  //
+  // Output schema definitions.
+  //
   val booksOutput = table[BookInfo]("books")
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
@@ -57,7 +61,6 @@ object Schemas extends Schema {
 
   val publishersOutput = table[PublisherInfo]("publishers")
   on(publishersOutput)(p => declare(
-    p.ebookDiscount is (named("ebook_discount")),
     p.implementsAgencyPricingModel is (named("implements_agency_pricing_model")),
     p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"), dbType("VARCHAR(4)"))))
