@@ -15,8 +15,10 @@ import java.util.concurrent.TimeUnit
 
 object DataExportingService extends App with Logging {
 
+  import ShopSchema._
+  import ClubcardSchema._
+  import ReportingSchema._
   import DbUtils._
-  import Schemas._
 
   logger.info("Starting")
 
@@ -26,10 +28,10 @@ object DataExportingService extends App with Logging {
 
   // Configure datasources for reading and writing.
   val shopDatasource = createDatasource("jdbc:mysql://localhost/shop", "gospoken", "gospoken")
+  val clubcardDatasource = createDatasource("jdbc:mysql://localhost/clubcard", "gospoken", "gospoken")
   val outputDatasource = createDatasource("jdbc:mysql://localhost/reporting", "gospoken", "gospoken")
 
-  // The global singleton session factory (yuck) refers to the shop database.
-  // TODO: review this.
+  // The global/default singleton session factory (yuck) refers to the shop database.
   SessionFactory.concreteFactory =
     Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
   SessionFactory.newSession.bindToCurrentThread
@@ -38,11 +40,13 @@ object DataExportingService extends App with Logging {
 
     // Clear old snapshots.
     using(outputSession) {
-      publishersOutput.deleteWhere(p => p.id isNotNull)
-      booksOutput.deleteWhere(b => b.id isNotNull)
+      publishersOutput.deleteWhere(r => 1 === 1)
+      booksOutput.deleteWhere(r => 1 === 1)
+      userClubcardsOutput.deleteWhere(r => 1 === 1)
     }
 
     // Write new snapshots.
+    // Copy these sequentially, in the same transaction. 
     copy(from(publisherData)(publisher => select(publisher)),
       (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
         pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
@@ -53,14 +57,27 @@ object DataExportingService extends App with Logging {
           b.description, b.languageCode, b.numberOfSections)
       }, booksOutput)
 
+    withReadOnlySession(clubcardDatasource)(clubcardSession => {
+      using(clubcardSession) {
+        val clubcardResults = from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
+          where(clubcard.id === link.cardId and user.id === link.userId)
+            select (clubcard, user))
+        val converter: ((Clubcard, ClubcardUser)) => UserClubcardInfo =
+          { case (card: Clubcard, user: ClubcardUser) => new UserClubcardInfo(card.cardNumber, Integer.parseInt(user.userId)) }
+        copy(clubcardResults, converter, userClubcardsOutput)
+      }
+    })
   })
+
+  logger.info("Completed all tasks")
 
   /**
    * Copy the results from the given Query to the given output table, converting objects
    * using the given converter.
    *
    * Objects from the input query are streamed and written to the output database using
-   * batched writes, for performance.
+   * batched writes, for performance. The overall copy job is synchronous, in that it will wait for
+   * the copying to complete before returning.
    */
   def copy[T1, T2](query: Iterable[T1], converter: (T1) => T2,
     output: Table[T2])(implicit outputSession: Session, timeout: Duration) = {
@@ -75,9 +92,7 @@ object DataExportingService extends App with Logging {
     logger.info(s"Executing data export to table ${output.name}")
     observable.subscribe
     Await.result(p.future, timeout)
-    logger.info(s"Completed data export to table ${output.name}")
+    logger.info(s"Completed export to table")
   }
-
-  logger.info("Completed all tasks")
 
 }

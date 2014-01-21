@@ -23,7 +23,8 @@ object DbUtils {
   }
 
   /**
-   *  Helper function that creates a session and performs the given action in a single transaction.
+   * Run the given action, providing it a session for the database, and treating any
+   * changes as a single transaction. On error, any changes will be rolled back.
    */
   def withSession(datasource: DataSource)(fn: (Session) => Unit) = {
     val connection = datasource.getConnection()
@@ -37,6 +38,19 @@ object DbUtils {
         connection.rollback()
         throw t
       }
+    } finally {
+      connection.close()
+    }
+  }
+
+  /**
+   * Run the given action, providing it a session for the database.
+   */
+  def withReadOnlySession(datasource: DataSource)(fn: (Session) => Unit) = {
+    val connection = datasource.getConnection()
+    try {
+      val session: Session = Session.create(connection, new MySQLAdapter)
+      fn(session)
     } finally {
       connection.close()
     }

@@ -17,15 +17,16 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
 
   import DbUtils._
 
-  trait TransactionFixture {
+  trait ConnectionFixture {
     val datasource = mock[DataSource]
     val connection = mock[Connection]
     doReturn(connection).when(datasource).getConnection
     val fn = mock[(Session) => Unit]
   }
 
-  "Given action" should "run in a managed transaction" in new TransactionFixture {
+  "Managed transaction" should "commit changes after successful action" in new ConnectionFixture {
     DbUtils.withSession(datasource)(fn)
+
     verify(fn).apply(any[Session])
     verify(connection).setAutoCommit(false)
     verify(connection).commit()
@@ -33,13 +34,13 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
     verifyNoMoreInteractions(fn, connection)
   }
 
-  "Managed transaction" should "roll back connection when action fails" in new TransactionFixture {
+  "Managed transaction" should "roll back connection when action fails" in new ConnectionFixture {
     val ex = new RuntimeException("Test exception")
     doThrow(ex).when(fn).apply(any[Session])
 
     val thrown = intercept[Exception] { DbUtils.withSession(datasource)(fn) }
-    assert(thrown eq ex)
 
+    assert(thrown eq ex)
     verify(fn).apply(any[Session])
     verify(connection).setAutoCommit(false)
     verify(connection).rollback()
@@ -47,7 +48,7 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
     verifyNoMoreInteractions(fn, connection)
   }
 
-  "Managed transaction" should "roll back connection when commit fails" in new TransactionFixture {
+  "Managed transaction" should "roll back connection when commit fails" in new ConnectionFixture {
     val ex = new SQLException("Test exception")
     doThrow(ex).when(connection).commit()
 
@@ -58,6 +59,26 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
     verify(connection).setAutoCommit(false)
     verify(connection).commit()
     verify(connection).rollback()
+    verify(connection).close()
+    verifyNoMoreInteractions(fn, connection)
+  }
+
+  "Read only connection" should "be closed after successful action" in new ConnectionFixture {
+    DbUtils.withReadOnlySession(datasource)(fn)
+
+    verify(fn).apply(any[Session])
+    verify(connection).close()
+    verifyNoMoreInteractions(fn, connection)
+  }
+
+  "Read only connection" should "be closed after failed action" in new ConnectionFixture {
+    val ex = new RuntimeException("Test exception")
+    doThrow(ex).when(fn).apply(any[Session])
+
+    val thrown = intercept[Exception] { DbUtils.withReadOnlySession(datasource)(fn) }
+    assert(thrown eq ex)
+
+    verify(fn).apply(any[Session])
     verify(connection).close()
     verifyNoMoreInteractions(fn, connection)
   }
