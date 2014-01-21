@@ -22,7 +22,9 @@ object DbUtils {
     datasource
   }
 
-  /** Helper function that creates a session and performs the given action in a single transaction. */
+  /**
+   *  Helper function that creates a session and performs the given action in a single transaction.
+   */
   def withSession(datasource: DataSource)(fn: (Session) => Unit) = {
     val connection = datasource.getConnection()
     try {

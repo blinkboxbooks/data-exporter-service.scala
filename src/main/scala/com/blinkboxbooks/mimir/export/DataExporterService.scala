@@ -43,11 +43,11 @@ object DataExportingService extends App with Logging {
     }
 
     // Write new snapshots.
-    copyData(from(publisherData)(publisher => select(publisher)),
+    copy(from(publisherData)(publisher => select(publisher)),
       (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
         pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
 
-    copyData(from(bookData)(book => select(book)),
+    copy(from(bookData)(book => select(book)),
       (b: Book) => {
         new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
           b.description, b.languageCode, b.numberOfSections)
@@ -62,7 +62,7 @@ object DataExportingService extends App with Logging {
    * Objects from the input query are streamed and written to the output database using
    * batched writes, for performance.
    */
-  def copyData[T1, T2](query: Query[T1], converter: (T1) => T2,
+  def copy[T1, T2](query: Iterable[T1], converter: (T1) => T2,
     output: Table[T2])(implicit outputSession: Session, timeout: Duration) = {
     val p = promise[Unit]
     val observable = Observable.from(query)

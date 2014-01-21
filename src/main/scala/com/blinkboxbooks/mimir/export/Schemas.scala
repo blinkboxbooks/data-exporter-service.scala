@@ -4,7 +4,9 @@ import java.sql.Date
 import org.squeryl.Schema
 import org.squeryl.PrimitiveTypeMode._
 
-// Input objects.
+// 
+// Objects for input schemas.
+//
 case class Book(id: String, publisherId: String, publicationDate: Date,
   title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
   def this() = this("", "", new Date(0), "", None, None, 0)
@@ -14,7 +16,9 @@ case class Publisher(id: Int, name: String, ebookDiscount: Int,
   def this() = this(0, "", 0, false, None)
 }
 
-// Output objects.
+// 
+// Objects for output schemas.
+//
 case class BookInfo(id: String, publisherId: String, publicationDate: Date,
   title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
   def this() = this("", "", new Date(0), "", None, None, 0)
@@ -29,8 +33,12 @@ object Schemas extends Schema {
   //  printDdl(str => println(str))
 
   // 
-  // Input schema definitions
+  // Input schema definitions. 
   //
+  // These are not full definitions of the corresponding tables, they just specify the columns
+  // that we read and the info needed to read them (e.g. column name but not details about column types).
+  //
+
   val bookData = table[Book]("dat_book")
   on(bookData)(b => declare(
     b.id is (named("isbn")),

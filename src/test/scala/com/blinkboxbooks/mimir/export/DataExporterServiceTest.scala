@@ -1,4 +1,4 @@
-package com.blinkboxbooks.mimir.reporting
+package com.blinkboxbooks.mimir.export
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner

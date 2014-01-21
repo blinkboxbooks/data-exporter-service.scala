@@ -5,5 +5,5 @@ exporter.jdbc.driver=com.mysql.jdbc.Driver
 exporter.jdbc.url=jdbc:mysql://localhost/reporting
 exporter.jdbc.username=gospoken
 exporter.jdbc.password=gospoken
-exporter.jdbc.timeout.s=10
-
+exporter.jdbc.timeout.s=1800
+exporter.jdbc.batchsize=5000
