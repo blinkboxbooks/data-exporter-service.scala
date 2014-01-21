@@ -59,11 +59,12 @@ object DataExportingService extends App with Logging {
 
     withReadOnlySession(clubcardDatasource)(clubcardSession => {
       using(clubcardSession) {
-        val clubcardResults = from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
-          where(clubcard.id === link.cardId and user.id === link.userId)
-            select (clubcard, user))
-        val converter: ((Clubcard, ClubcardUser)) => UserClubcardInfo =
-          { case (card: Clubcard, user: ClubcardUser) => new UserClubcardInfo(card.cardNumber, Integer.parseInt(user.userId)) }
+        val clubcardResults =
+          from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
+            where(clubcard.id === link.cardId and user.id === link.userId)
+              select (clubcard, user))
+        val converter = (cu: (Clubcard, ClubcardUser)) =>
+          new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
         copy(clubcardResults, converter, userClubcardsOutput)
       }
     })

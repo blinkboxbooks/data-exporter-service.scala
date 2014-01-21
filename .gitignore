@@ -16,7 +16,7 @@ project/plugins/project/
 .project
 .settings
 .DS_Store
-.sc
+*.sc
 
 # Other
 /bin
