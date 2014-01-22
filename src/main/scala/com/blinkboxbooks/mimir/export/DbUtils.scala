@@ -4,18 +4,19 @@ import org.apache.commons.dbcp.BasicDataSource
 import javax.sql.DataSource
 import org.squeryl.Session
 import org.squeryl.adapters.MySQLAdapter
+import com.typesafe.config.Config
 
 object DbUtils {
 
   /**
    * Create a datasource for the given MySQL DB.
    */
-  def createDatasource(url: String, username: String, password: String) = {
+  def createDatasource(prefix: String, config: Config) = {
     val datasource = new BasicDataSource
-    datasource.setUrl(url)
-    datasource.setUsername(username)
-    datasource.setPassword(password)
-    datasource.setDriverClassName("com.mysql.jdbc.Driver")
+    datasource.setUrl(config.getString(s"$prefix.jdbc.url"))
+    datasource.setUsername(config.getString(s"$prefix.jdbc.username"))
+    datasource.setPassword(config.getString(s"$prefix.jdbc.password"))
+    datasource.setDriverClassName(config.getString(s"$prefix.jdbc.driver"))
     datasource.setValidationQuery("SELECT 1")
     // Check it works OK before handing it out.
     datasource.getConnection.close

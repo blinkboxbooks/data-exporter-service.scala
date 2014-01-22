@@ -27,50 +27,63 @@ object DataExportingService extends App with Logging {
   implicit val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
 
   // Configure datasources for reading and writing.
-  val shopDatasource = createDatasource("jdbc:mysql://localhost/shop", "gospoken", "gospoken")
-  val clubcardDatasource = createDatasource("jdbc:mysql://localhost/clubcard", "gospoken", "gospoken")
-  val outputDatasource = createDatasource("jdbc:mysql://localhost/reporting", "gospoken", "gospoken")
+  val shopDatasource = createDatasource("shop", config)
+  val clubcardDatasource = createDatasource("clubcard", config)
+  val outputDatasource = createDatasource("reporting", config)
 
-  // The global/default singleton session factory (yuck) refers to the shop database.
-  SessionFactory.concreteFactory =
-    Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
-  SessionFactory.newSession.bindToCurrentThread
-
-  withSession(outputDatasource)(implicit outputSession => {
-
-    // Clear old snapshots.
-    using(outputSession) {
-      publishersOutput.deleteWhere(r => 1 === 1)
-      booksOutput.deleteWhere(r => 1 === 1)
-      userClubcardsOutput.deleteWhere(r => 1 === 1)
-    }
-
-    // Write new snapshots.
-    // Copy these sequentially, in the same transaction. 
-    copy(from(publisherData)(publisher => select(publisher)),
-      (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
-        pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
-
-    copy(from(bookData)(book => select(book)),
-      (b: Book) => {
-        new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
-          b.description, b.languageCode, b.numberOfSections)
-      }, booksOutput)
-
-    withReadOnlySession(clubcardDatasource)(clubcardSession => {
-      using(clubcardSession) {
-        val clubcardResults =
-          from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
-            where(clubcard.id === link.cardId and user.id === link.userId)
-              select (clubcard, user))
-        val converter = (cu: (Clubcard, ClubcardUser)) =>
-          new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-        copy(clubcardResults, converter, userClubcardsOutput)
-      }
-    })
-  })
+  runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
 
   logger.info("Completed all tasks")
+
+  /**
+   * Perform all the data export jobs.
+   */
+  def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
+    bufferSize: Int)(implicit timeout: Duration) = {
+
+    // The global/default singleton session factory (yuck) refers to the shop database.
+    SessionFactory.concreteFactory =
+      Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
+    SessionFactory.newSession.bindToCurrentThread
+
+    try {
+      withSession(outputDatasource)(implicit outputSession => {
+
+        // Clear old snapshots.
+        using(outputSession) {
+          publishersOutput.deleteWhere(r => 1 === 1)
+          booksOutput.deleteWhere(r => 1 === 1)
+          userClubcardsOutput.deleteWhere(r => 1 === 1)
+        }
+
+        // Write new snapshots.
+        // Copy these sequentially, in the same transaction. 
+        copy(from(publisherData)(publisher => select(publisher)),
+          (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
+            pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
+
+        copy(from(bookData)(book => select(book)),
+          (b: Book) => {
+            new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
+              b.description, b.languageCode, b.numberOfSections)
+          }, booksOutput)
+
+        withReadOnlySession(clubcardDatasource)(clubcardSession => {
+          using(clubcardSession) {
+            val clubcardResults =
+              from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
+                where(clubcard.id === link.cardId and user.id === link.userId)
+                  select (clubcard, user))
+            val converter = (cu: (Clubcard, ClubcardUser)) =>
+              new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
+            copy(clubcardResults, converter, userClubcardsOutput)
+          }
+        })
+      })
+    } finally {
+      Session.currentSession.unbindFromCurrentThread
+    }
+  }
 
   /**
    * Copy the results from the given Query to the given output table, converting objects
@@ -82,18 +95,22 @@ object DataExportingService extends App with Logging {
    */
   def copy[T1, T2](query: Iterable[T1], converter: (T1) => T2,
     output: Table[T2])(implicit outputSession: Session, timeout: Duration) = {
+
+    logger.info(s"Executing data export to table ${output.name}")
+
+    var count = 0
     val p = promise[Unit]
     val observable = Observable.from(query)
       .map(converter)
-      .buffer(bufferSize)
-      .doOnEach(entities => using(outputSession) { output.insert(entities) })
-      .doOnError(e => { p.failure(e); e.printStackTrace(System.err) })
-      .doOnCompleted(() => { p.success() })
+    // .buffer(bufferSize)
 
-    logger.info(s"Executing data export to table ${output.name}")
-    observable.subscribe
+    observable.subscribe(
+      entities => using(outputSession) { output.insert(entities); count += 1 /*entities.size*/ },
+      e => { p.failure(e); e.printStackTrace(System.err) },
+      () => p.success())
+
     Await.result(p.future, timeout)
-    logger.info(s"Completed export to table")
+    logger.info(s"Completed export of $count rows")
   }
 
 }

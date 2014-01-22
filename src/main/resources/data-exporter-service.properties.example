@@ -1,9 +1,23 @@
 # Data exporter service configuration.
 
-# Database that data is exported to.
-exporter.jdbc.driver=com.mysql.jdbc.Driver
-exporter.jdbc.url=jdbc:mysql://localhost/reporting
-exporter.jdbc.username=gospoken
-exporter.jdbc.password=gospoken
-exporter.jdbc.timeout.s=1800
+# General database settings.
+exporter.jdbc.timeout.s=300
 exporter.jdbc.batchsize=5000
+
+# Database used for reporting.
+reporting.jdbc.driver=com.mysql.jdbc.Driver
+reporting.jdbc.url=jdbc:mysql://localhost/reporting
+reporting.jdbc.username=gospoken
+reporting.jdbc.password=gospoken
+
+# Database for shop data.
+shop.jdbc.driver=com.mysql.jdbc.Driver
+shop.jdbc.url=jdbc:mysql://localhost/shop
+shop.jdbc.username=gospoken
+shop.jdbc.password=gospoken
+
+# Database for Clubcard data.
+clubcard.jdbc.driver=com.mysql.jdbc.Driver
+clubcard.jdbc.url=jdbc:mysql://localhost/clubcard
+clubcard.jdbc.username=gospoken
+clubcard.jdbc.password=gospoken
