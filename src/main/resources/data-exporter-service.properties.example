@@ -1,5 +1,11 @@
 # Data exporter service configuration.
 
+# Specifies schedule for data export, in cron format.
+# For example, the following runs the job every 2 minutes(!)
+# exporter.schedule=*/2 * * * *
+# This one runs the job at 3 am every day:
+exporter.schedule=00 3 * * *
+
 # General database settings.
 exporter.jdbc.timeout.s=300
 exporter.jdbc.batchsize=5000

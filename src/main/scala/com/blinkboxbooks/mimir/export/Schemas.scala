@@ -65,6 +65,7 @@ object ClubcardSchema extends Schema {
   on(clubcardUsers)(cu => declare(
     cu.cardId is (named("card_id")),
     cu.userId is (named("user_id"))))
+
 }
 
 //

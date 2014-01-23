@@ -20,7 +20,8 @@ libraryDependencies ++= Seq(
   "commons-dbcp"       % "commons-dbcp"         % "1.4",
   "com.typesafe"       % "config"               % "1.0.2" withSources() withJavadoc(),
   "org.mockito"        % "mockito-core"         % "1.9.5" % "test" withSources() withJavadoc(),
-  "com.netflix.rxjava" % "rxjava-scala" 		% "0.16.1" withSources() withJavadoc()
+  "com.netflix.rxjava" % "rxjava-scala" 		% "0.16.1" withSources() withJavadoc(),
+  "it.sauronsoftware.cron4j" % "cron4j"			% "2.2.5" withSources() withJavadoc()
 )
 
 EclipseKeys.createSrc := EclipseCreateSrc.Default + EclipseCreateSrc.Resource

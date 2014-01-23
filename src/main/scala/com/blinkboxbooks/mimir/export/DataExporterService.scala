@@ -12,6 +12,7 @@ import scala.concurrent.duration._
 import java.sql.Date
 import javax.sql.DataSource
 import java.util.concurrent.TimeUnit
+import it.sauronsoftware.cron4j.Scheduler
 
 object DataExportingService extends App with Logging {
 
@@ -19,8 +20,6 @@ object DataExportingService extends App with Logging {
   import ClubcardSchema._
   import ReportingSchema._
   import DbUtils._
-
-  logger.info("Starting")
 
   val config = ConfigFactory.load("data-exporter-service")
   val bufferSize = config.getInt("exporter.jdbc.batchsize")
@@ -31,9 +30,25 @@ object DataExportingService extends App with Logging {
   val clubcardDatasource = createDatasource("clubcard", config)
   val outputDatasource = createDatasource("reporting", config)
 
-  runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
+  if (args.contains("--now")) {
+    logger.info("Starting one-off export")
+    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
+    logger.info("Completed export")
+  } else {
+    val cronStr = config.getString("exporter.schedule")
+    logger.info(s"Scheduling data export with configuration: $cronStr")
 
-  logger.info("Completed all tasks")
+    val scheduler = new Scheduler()
+    scheduler.schedule(cronStr, new Runnable() {
+      override def run() {
+        logger.info("Starting scheduled export")
+        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
+        logger.info("Completed scheduled export")
+      }
+    });
+    scheduler.setDaemon(false)
+    scheduler.start()
+  }
 
   /**
    * Perform all the data export jobs.
