@@ -15,17 +15,20 @@ case class Publisher(id: Int, name: String, ebookDiscount: Int,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
   def this() = this(0, "", 0, false, None)
 }
+case class Genre(id: Int, parentId: Option[Int], bisacCode: Option[String], name: Option[String]) {
+  def this() = this(0, None, None, None)
+}
+case class MapBookToGenre(isbn: String, genreId: Int) {
+  def this() = this("", 0)
+}
 case class CurrencyRate(fromCurrency: String, toCurrency: String, rate: BigDecimal) {
   def this() = this("", "", 0)
 }
-case class Author(id: Int, firstName: String, middleName: String, lastName: String) {
-  def this() = this(0, "", "", "")
+case class Contributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String]) {
+  def this() = this(0, "", None, None)
 }
-case class MapBookAuthor(authorId: Int, isbn: String) {
-  def this() = this(0, "")
-}
-case class ContributorRole(authorId: Int, isbn: String, role: String = "author") {
-  def this() = this(0, "", "")
+case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
+  def this() = this(0, "", 0)
 }
 
 // 
@@ -52,20 +55,29 @@ object ShopSchema extends Schema {
     p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"))))
 
+  val contributorData = table[Contributor]("dat_contributor")
+  on(contributorData)(c => declare(
+    c.fullName is (named("full_name")),
+    c.firstName is (named("first_name")),
+    c.lastName is (named("last_name"))))
+
+  val mapBookContributorData = table[MapBookToContributor]("map_book_contributor")
+  on(mapBookContributorData)(m => declare(
+    m.contributorId is (named("contributor_id"))))
+
+  val genreData = table[Genre]("dat_genre")
+  on(genreData)(g => declare(
+    g.parentId is (named("parent_id")),
+    g.bisacCode is (named("bisac_code"))))
+
+  val bookGenreData = table[MapBookToGenre]("map_book_genre")
+  on(bookGenreData)(g => declare(
+    g.genreId is (named("genre_id"))))
+
   val currencyRateData = table[CurrencyRate]("dat_currency_rate")
   on(currencyRateData)(e => declare(
     e.fromCurrency is (named("from_currency")),
     e.toCurrency is (named("to_currency"))))
-
-  val authorData = table[Author]("dat_author")
-  on(authorData)(c => declare(
-    c.firstName is (named("first_name")),
-    c.middleName is (named("middle_name")),
-    c.lastName is (named("last_name"))))
-
-  val mapBookAuthorData = table[MapBookAuthor]("map_book_author")
-  on(mapBookAuthorData)(m => declare(
-    m.authorId is (named("author_id"))))
 
 }
 
@@ -107,7 +119,6 @@ case class UserClubcardInfo(cardId: String, userId: Int) {
 object ReportingSchema extends Schema {
 
   val booksOutput = table[Book]("books")
-
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
@@ -120,6 +131,7 @@ object ReportingSchema extends Schema {
   val publishersOutput = table[Publisher]("publishers")
   on(publishersOutput)(p => declare(
     p.implementsAgencyPricingModel is (named("implements_agency_pricing_model")),
+    p.name is (dbType("VARCHAR(128)")),
     p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"), dbType("VARCHAR(4)"))))
 
@@ -133,16 +145,26 @@ object ReportingSchema extends Schema {
     e.fromCurrency is (named("from_currency"), dbType("VARCHAR(5)")),
     e.toCurrency is (named("to_currency"), dbType("VARCHAR(5)"))))
 
-  val contributorsOutput = table[Author]("contributors")
+  val contributorsOutput = table[Contributor]("contributors")
   on(contributorsOutput)(c => declare(
-    c.firstName is (named("first_name"), dbType("VARCHAR(128)")),
-    c.middleName is (named("middle_name"), dbType("VARCHAR(128)")),
-    c.lastName is (named("last_name"), dbType("VARCHAR(128)"))))
+    c.fullName is (named("full_name"), dbType("VARCHAR(256)")),
+    c.firstName is (named("first_name"), dbType("VARCHAR(256)")),
+    c.lastName is (named("last_name"), dbType("VARCHAR(256)"))))
 
-  val contributorRolesOutput = table[ContributorRole]("contributor_roles")
+  val contributorRolesOutput = table[MapBookToContributor]("contributor_roles")
   on(contributorRolesOutput)(m => declare(
-    m.authorId is (named("author_id"))))
+    m.contributorId is (named("contributor_id"))))
 
-  //  printDdl(str => println(str))
+  val genresOutput = table[Genre]("genres")
+  on(genresOutput)(g => declare(
+    g.parentId is (named("parent_id")),
+    g.bisacCode is (named("bisac_code"), dbType("VARCHAR(8)"))))
+
+  val bookGenresOutput = table[MapBookToGenre]("book_genres")
+  on(bookGenresOutput)(g => declare(
+    g.genreId is (named("genre_id")),
+    g.isbn is (dbType("VARCHAR(13)"))))
+
+  printDdl(str => println(str))
 
 }

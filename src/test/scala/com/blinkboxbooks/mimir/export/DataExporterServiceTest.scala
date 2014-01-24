@@ -40,8 +40,16 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new CurrencyRate("GBP", "USD", 1.3069),
     new CurrencyRate("GBP", "JPY", 132.4146))
 
-  val authors = List(new Author(11, "Bill", "Bryson", "Bill Bryson"),
-    new Author(22, "Leo", "Tolstoy", "Leo Tolstoy"))
+  val contributors = List(new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson")),
+    new Contributor(22, "Leo", Some("Leo"), Some("Tolstoy")))
+
+  val genres = List(new Genre(1, None, Some("FIC00000"), Some("Fiction")),
+    new Genre(2, Some(1), Some("FIC00002"), Some("Pulp Fiction")),
+    new Genre(3, Some(1), Some("FIC00003"), Some("Highbrow Fiction")))
+  val bookGenres = List(new MapBookToGenre(book1.id, genres(0).id),
+    new MapBookToGenre(book2.id, genres(1).id))
+  val bookContributors = List(new MapBookToContributor(contributors(0).id, book1.id, 0),
+    new MapBookToContributor(contributors(1).id, book2.id, 1))
 
   before {
     initOutputDb()
@@ -66,15 +74,16 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toList === List(book1, book2))
       assert(from(publishersOutput)(select(_)).toList === List(publisher1, publisher2))
-      assert(from(contributorsOutput)(select(_)).toList === authors)
-      assert(from(contributorRolesOutput)(select(_)).toList === List(
-        new ContributorRole(authors(0).id, book1.id), new ContributorRole(authors(1).id, book2.id)))
+      assert(from(contributorsOutput)(select(_)).toList === contributors)
+      assert(from(contributorRolesOutput)(select(_)).toList === bookContributors)
 
       assert(from(userClubcardsOutput)(select(_)).toList === List(
         new UserClubcardInfo("card1", 101), new UserClubcardInfo("card2", 102)))
 
       assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
 
+      assert(from(genresOutput)(select(_)).toList === genres)
+      assert(from(bookGenresOutput)(select(_)).toList === bookGenres)
     }
   }
 
@@ -136,23 +145,27 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       List(book1, book2).foreach { bookData.insert(_) }
       List(publisher1, publisher2)
         .foreach { publisherData.insert(_) }
+      contributors.foreach { contributorData.insert(_) }
+      bookContributors.foreach { mapBookContributorData.insert(_) }
+      genres.foreach { genreData.insert(_) }
+      bookGenres.foreach { bookGenreData.insert(_) }
       currencyRates.foreach { currencyRateData.insert(_) }
-      authors.foreach { authorData.insert(_) }
-      mapBookAuthorData.insert(new MapBookAuthor(authors(0).id, book1.id))
-      mapBookAuthorData.insert(new MapBookAuthor(authors(1).id, book2.id))
     }
     using(clubcardDbSession) {
       insertClubcardForUser(101, 1001, "card1")
       insertClubcardForUser(102, 1002, "card2")
     }
     using(reportingDbSession) {
-      // Insert some existing data into each output table, so we can check that this gets cleared.
+      // Insert some existing data into each output table, 
+      // so we can check that these get cleared on export.
       booksOutput.insert(new Book())
       publishersOutput.insert(new Publisher())
       userClubcardsOutput.insert(new UserClubcardInfo())
       currencyRatesOutput.insert(new CurrencyRate())
-      contributorsOutput.insert(new Author())
-      contributorRolesOutput.insert(new ContributorRole())
+      contributorsOutput.insert(new Contributor())
+      contributorRolesOutput.insert(new MapBookToContributor())
+      genresOutput.insert(new Genre())
+      bookGenresOutput.insert(new MapBookToGenre())
     }
   }
 

@@ -70,16 +70,17 @@ object DataExportingService extends App with Logging {
         currencyRatesOutput.deleteWhere(r => 1 === 1)
         contributorsOutput.deleteWhere(r => 1 === 1)
         contributorRolesOutput.deleteWhere(r => 1 === 1)
+        genresOutput.deleteWhere(r => 1 === 1)
+        bookGenresOutput.deleteWhere(r => 1 === 1)
       }
 
-      // Write new snapshots.
-      // Copy these sequentially, in the same transaction. 
+      // Write new snapshots. Copy these sequentially, in the same transaction. 
       copy(from(bookData)(select(_)), booksOutput, identity[Book])
       copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
-      copy(from(authorData)(select(_)), contributorsOutput, identity[Author])
-      copy(from(mapBookAuthorData)(select(_)), contributorRolesOutput, (m: MapBookAuthor) =>
-        new ContributorRole(m.authorId, m.isbn))
-
+      copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor])
+      copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
+      copy(from(genreData)(select(_)), genresOutput, identity[Genre])
+      copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
       copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
 
       withReadOnlySession(clubcardDatasource)(clubcardSession => {
