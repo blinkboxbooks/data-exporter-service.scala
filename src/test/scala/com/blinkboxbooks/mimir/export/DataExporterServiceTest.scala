@@ -40,6 +40,9 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new CurrencyRate("GBP", "USD", 1.3069),
     new CurrencyRate("GBP", "JPY", 132.4146))
 
+  val authors = List(new Author(11, "Bill", "Bryson", "Bill Bryson"),
+    new Author(22, "Leo", "Tolstoy", "Leo Tolstoy"))
+
   before {
     initOutputDb()
   }
@@ -61,22 +64,17 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   def checkSuccessfulExport() {
     using(reportingDbSession) {
-      assert(from(booksOutput)(b => select(b)).toList ===
-        List(new BookInfo(book1.id, book1.publisherId, book1.publicationDate,
-          book1.title, book1.description, book1.languageCode, book1.numberOfSections),
-          new BookInfo(book2.id, book2.publisherId, book2.publicationDate,
-            book2.title, book2.description, book2.languageCode, book2.numberOfSections)))
+      assert(from(booksOutput)(select(_)).toList === List(book1, book2))
+      assert(from(publishersOutput)(select(_)).toList === List(publisher1, publisher2))
+      assert(from(contributorsOutput)(select(_)).toList === authors)
+      assert(from(contributorRolesOutput)(select(_)).toList === List(
+        new ContributorRole(authors(0).id, book1.id), new ContributorRole(authors(1).id, book2.id)))
 
-      assert(from(publishersOutput)(b => select(b)).toList === List(
-        new PublisherInfo(publisher1.id, publisher1.name, publisher1.ebookDiscount,
-          publisher1.implementsAgencyPricingModel, publisher1.countryCode),
-        new PublisherInfo(publisher2.id, publisher2.name, publisher2.ebookDiscount,
-          publisher2.implementsAgencyPricingModel, publisher2.countryCode)))
-
-      assert(from(userClubcardsOutput)(b => select(b)).toList === List(
+      assert(from(userClubcardsOutput)(select(_)).toList === List(
         new UserClubcardInfo("card1", 101), new UserClubcardInfo("card2", 102)))
 
-      assert(from(currencyRatesOutput)(r => select(r)).toList === currencyRates)
+      assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
+
     }
   }
 
@@ -139,6 +137,9 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       List(publisher1, publisher2)
         .foreach { publisherData.insert(_) }
       currencyRates.foreach { currencyRateData.insert(_) }
+      authors.foreach { authorData.insert(_) }
+      mapBookAuthorData.insert(new MapBookAuthor(authors(0).id, book1.id))
+      mapBookAuthorData.insert(new MapBookAuthor(authors(1).id, book2.id))
     }
     using(clubcardDbSession) {
       insertClubcardForUser(101, 1001, "card1")
@@ -146,10 +147,12 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     }
     using(reportingDbSession) {
       // Insert some existing data into each output table, so we can check that this gets cleared.
-      booksOutput.insert(new BookInfo())
-      publishersOutput.insert(new PublisherInfo())
+      booksOutput.insert(new Book())
+      publishersOutput.insert(new Publisher())
       userClubcardsOutput.insert(new UserClubcardInfo())
       currencyRatesOutput.insert(new CurrencyRate())
+      contributorsOutput.insert(new Author())
+      contributorRolesOutput.insert(new ContributorRole())
     }
   }
 

@@ -37,7 +37,6 @@ object DataExportingService extends App with Logging {
   } else {
     val cronStr = config.getString("exporter.schedule")
     logger.info(s"Scheduling data export with configuration: $cronStr")
-
     val scheduler = new Scheduler()
     scheduler.schedule(cronStr, new Runnable() {
       override def run() {
@@ -61,44 +60,40 @@ object DataExportingService extends App with Logging {
       Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
     SessionFactory.newSession.bindToCurrentThread
 
-    try {
-      withSession(outputDatasource)(implicit outputSession => {
+    withSession(outputDatasource)(implicit outputSession => {
 
-        // Clear old snapshots.
-        using(outputSession) {
-          publishersOutput.deleteWhere(r => 1 === 1)
-          booksOutput.deleteWhere(r => 1 === 1)
-          userClubcardsOutput.deleteWhere(r => 1 === 1)
-          currencyRatesOutput.deleteWhere(r => 1 === 1)
+      // Clear old snapshots.
+      using(outputSession) {
+        publishersOutput.deleteWhere(r => 1 === 1)
+        booksOutput.deleteWhere(r => 1 === 1)
+        userClubcardsOutput.deleteWhere(r => 1 === 1)
+        currencyRatesOutput.deleteWhere(r => 1 === 1)
+        contributorsOutput.deleteWhere(r => 1 === 1)
+        contributorRolesOutput.deleteWhere(r => 1 === 1)
+      }
+
+      // Write new snapshots.
+      // Copy these sequentially, in the same transaction. 
+      copy(from(bookData)(select(_)), booksOutput, identity[Book])
+      copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
+      copy(from(authorData)(select(_)), contributorsOutput, identity[Author])
+      copy(from(mapBookAuthorData)(select(_)), contributorRolesOutput, (m: MapBookAuthor) =>
+        new ContributorRole(m.authorId, m.isbn))
+
+      copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+
+      withReadOnlySession(clubcardDatasource)(clubcardSession => {
+        using(clubcardSession) {
+          val clubcardResults =
+            from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
+              where(clubcard.id === link.cardId and user.id === link.userId)
+                select (clubcard, user))
+          val converter = (cu: (Clubcard, ClubcardUser)) =>
+            new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
+          copy(clubcardResults, userClubcardsOutput, converter)
         }
-
-        // Write new snapshots.
-        // Copy these sequentially, in the same transaction. 
-        copy(from(publisherData)(select(_)), publishersOutput,
-          (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
-            pub.implementsAgencyPricingModel, pub.countryCode))
-
-        copy(from(bookData)(select(_)), booksOutput,
-          (b: Book) => new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
-            b.description, b.languageCode, b.numberOfSections))
-
-        copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
-
-        withReadOnlySession(clubcardDatasource)(clubcardSession => {
-          using(clubcardSession) {
-            val clubcardResults =
-              from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
-                where(clubcard.id === link.cardId and user.id === link.userId)
-                  select (clubcard, user))
-            val converter = (cu: (Clubcard, ClubcardUser)) =>
-              new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-            copy(clubcardResults, userClubcardsOutput, converter)
-          }
-        })
       })
-    } finally {
-      Session.currentSession.unbindFromCurrentThread
-    }
+    })
   }
 
   /**
