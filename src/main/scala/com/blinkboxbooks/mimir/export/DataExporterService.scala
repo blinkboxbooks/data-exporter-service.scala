@@ -45,7 +45,7 @@ object DataExportingService extends App with Logging {
         runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
         logger.info("Completed scheduled export")
       }
-    });
+    })
     scheduler.setDaemon(false)
     scheduler.start()
   }
@@ -69,19 +69,20 @@ object DataExportingService extends App with Logging {
           publishersOutput.deleteWhere(r => 1 === 1)
           booksOutput.deleteWhere(r => 1 === 1)
           userClubcardsOutput.deleteWhere(r => 1 === 1)
+          currencyRatesOutput.deleteWhere(r => 1 === 1)
         }
 
         // Write new snapshots.
         // Copy these sequentially, in the same transaction. 
-        copy(from(publisherData)(publisher => select(publisher)),
+        copy(from(publisherData)(select(_)), publishersOutput,
           (pub: Publisher) => new PublisherInfo(pub.id, pub.name, pub.ebookDiscount,
-            pub.implementsAgencyPricingModel, pub.countryCode), publishersOutput)
+            pub.implementsAgencyPricingModel, pub.countryCode))
 
-        copy(from(bookData)(book => select(book)),
-          (b: Book) => {
-            new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
-              b.description, b.languageCode, b.numberOfSections)
-          }, booksOutput)
+        copy(from(bookData)(select(_)), booksOutput,
+          (b: Book) => new BookInfo(b.id, b.publisherId, b.publicationDate, b.title,
+            b.description, b.languageCode, b.numberOfSections))
+
+        copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
 
         withReadOnlySession(clubcardDatasource)(clubcardSession => {
           using(clubcardSession) {
@@ -91,7 +92,7 @@ object DataExportingService extends App with Logging {
                   select (clubcard, user))
             val converter = (cu: (Clubcard, ClubcardUser)) =>
               new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-            copy(clubcardResults, converter, userClubcardsOutput)
+            copy(clubcardResults, userClubcardsOutput, converter)
           }
         })
       })
@@ -108,14 +109,14 @@ object DataExportingService extends App with Logging {
    * batched writes, for performance. The overall copy job is synchronous, in that it will wait for
    * the copying to complete before returning.
    */
-  def copy[T1, T2](query: Iterable[T1], converter: (T1) => T2,
-    output: Table[T2])(implicit outputSession: Session, timeout: Duration) = {
+  def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2)(
+    implicit outputSession: Session, timeout: Duration) = {
 
     logger.info(s"Executing data export to table ${output.name}")
 
     var count = 0
     val p = promise[Unit]
-    val observable = Observable.from(query)
+    val observable = Observable.from(input)
       .map(converter)
     // .buffer(bufferSize)
 

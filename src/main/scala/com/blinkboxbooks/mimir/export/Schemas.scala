@@ -15,6 +15,9 @@ case class Publisher(id: Int, name: String, ebookDiscount: Int,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
   def this() = this(0, "", 0, false, None)
 }
+case class CurrencyRate(fromCurrency: String, toCurrency: String, rate: BigDecimal) {
+  def this() = this("", "", 0)
+}
 
 // 
 // Input schema definitions. 
@@ -39,6 +42,11 @@ object ShopSchema extends Schema {
     p.implementsAgencyPricingModel is (named("implements_agency_pricing_model")),
     p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"))))
+
+  val currencyRateData = table[CurrencyRate]("dat_currency_rate")
+  on(currencyRateData)(e => declare(
+    e.fromCurrency is (named("from_currency")),
+    e.toCurrency is (named("to_currency"))))
 
 }
 
@@ -108,6 +116,11 @@ object ReportingSchema extends Schema {
     c.cardId is (named("clubcard_id"), dbType("VARCHAR(20)")),
     c.userId is (named("user_id"))))
 
-  //  printDdl(str => println(str))
+  val currencyRatesOutput = table[CurrencyRate]("currency_rates")
+  on(currencyRatesOutput)(e => declare(
+    e.fromCurrency is (named("from_currency")),
+    e.toCurrency is (named("to_currency"))))
+
+    printDdl(str => println(str))
 
 }

@@ -31,10 +31,14 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   var clubcardDbSession: Session = _
   var reportingDbSession: Session = _
 
+  // Test data.
   val book1 = book("isbn1", "pub1")
   val book2 = book("isbn2", "pub2").copy(description = Some("descr 2"))
   val publisher1 = publisher(1, book1.publisherId)
   val publisher2 = publisher(2, book2.publisherId)
+  val currencyRates = List(new CurrencyRate("GBP", "EUR", 1.2315),
+    new CurrencyRate("GBP", "USD", 1.3069),
+    new CurrencyRate("GBP", "JPY", 132.4146))
 
   before {
     initOutputDb()
@@ -71,6 +75,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
       assert(from(userClubcardsOutput)(b => select(b)).toList === List(
         new UserClubcardInfo("card1", 101), new UserClubcardInfo("card2", 102)))
+
+      assert(from(currencyRatesOutput)(r => select(r)).toList === currencyRates)
     }
   }
 
@@ -132,6 +138,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       List(book1, book2).foreach { bookData.insert(_) }
       List(publisher1, publisher2)
         .foreach { publisherData.insert(_) }
+      currencyRates.foreach { currencyRateData.insert(_) }
     }
     using(clubcardDbSession) {
       insertClubcardForUser(101, 1001, "card1")
@@ -142,6 +149,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       booksOutput.insert(new BookInfo())
       publishersOutput.insert(new PublisherInfo())
       userClubcardsOutput.insert(new UserClubcardInfo())
+      currencyRatesOutput.insert(new CurrencyRate())
     }
   }
 
