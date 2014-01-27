@@ -15,11 +15,15 @@ given at [this page on Confluence](https://tools.mobcastdev.com/confluence/displ
 
 To build the service, you need to have [sbt](acceptance-test/data-export-service-test.properties.example) version 0.13 installed.
 
-To run the service, use the command:
+To run the service in development, use the command:
 
 ```
 $ sbt run
 ```
+
+The service takes an optional command line parameter "--now". By default, the service starts scheduling 
+data export jobs at the given intervals. But this parameter will make the service run a one-off export, then exit.
+This is useful for testing and performing one-off dumps of reporting data. 
 
 To build a deployable version of the service, use the command:
 

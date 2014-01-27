@@ -69,7 +69,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkSuccessfulExport()
   }
 
-  test("Buffer size of 1 should produce same results as with larger batches") {
+  test("Batch size of 1 should produce same results as with larger batches") {
     val shopDatasource = testDatasource("shop")
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
@@ -134,10 +134,18 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
   }
 
-  test("Successful copy to table") {
+  test("Successful copy to table with batch size 1") {
+    testCopyToTable(1)
+  }
+
+  test("Successful copy to table with batch size 100") {
+    testCopyToTable(100)
+  }
+
+  def testCopyToTable(batchSize: Int) {
     using(reportingDbSession) {
       currencyRatesOutput.deleteWhere(r => 1 === 1)
-      DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate])(
+      DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate], 100)(
         reportingDbSession, timeout)
       assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
     }
@@ -151,7 +159,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       def failure[T]: T = throw ex
       val failingSequence = currencyRates(0) #:: failure[CurrencyRate] #:: currencyRates(1) #:: Stream.empty
       val thrown = intercept[SQLException] {
-        DataExporterService.copy(failingSequence, currencyRatesOutput, identity[CurrencyRate])(
+        DataExporterService.copy(failingSequence, currencyRatesOutput, identity[CurrencyRate], 1)(
           reportingDbSession, timeout)
       }
       assert(thrown eq ex, "Should pass on underlying exception")
