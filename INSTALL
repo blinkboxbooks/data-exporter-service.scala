@@ -6,8 +6,8 @@ This will build a single jar file that can be run.
 
 To run the service, you need to provide it with configuration, typically as a properties file.
 An example file is in src/main/resources/data-exporting-service.properties.example.
-Edit this as necessary, then leave it on the classpath when you run the service.
+Edit this as necessary, then put it in the directory you'll be running the service from.  
 
 To run the service, use a command like this:
 
-$ java -cp .:data-exporter-service-assembly-1.0.jar com.blinkboxbooks.mimir.export.DataExporterService
+$ java -jar data-exporter-service-assembly-1.0.jar
