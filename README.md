@@ -21,9 +21,13 @@ To run the service in development, use the command:
 $ sbt run
 ```
 
-The service takes an optional command line parameter "--now". By default, the service starts scheduling 
-data export jobs at the given intervals. But this parameter will make the service run a one-off export, then exit.
-This is useful for testing and performing one-off dumps of reporting data. 
+By default, the service starts scheduling data export jobs at the given intervals. But there's also a command
+line argument for running a one-off export, "--now". This is useful for testing and performing one-off update 
+of reporting data. So, you can run it via sbt like this:
+
+```
+$ sbt run "--now"
+```
 
 To build a deployable version of the service, use the command:
 
@@ -57,38 +61,11 @@ $ sbt eclipse with-source=true
 
 ## MySQL database creation
 
-To set up the database tables use the active record migrations, first ensure that you have a 
-properties file in the root directory of the project. You can use the same properties file that 
-you use to run the service, for example by creating a symlink to this file like this:
+To set up the database tables, run the script db/schema.sql 
+against the desired database server. For example:
 
 ```
-$ ln -s src/main/resources/data-export-service.properties data-export-service.properties
-```
-
-Then to run the database scripts, run this command from the project root directory:
-
-```
-$ rake db:migrate
-```
-
-If you don't like running active record migrations and would rather run plain old SQL then 
-set up a sacrificial database and use the `db:migrate_with_ddl` task instead, e.g.
-
-```
-$ rake db:migrate_with_ddl
-```
-
-This will output the SQL that was sent to the database in a file called "migration.sql" so you can run 
-that on a different instance later. If you really want, you can set a different file name for the output, e.g.
-
-```
-$ rake db:migrate_with_ddl["my_file.sql"]
-```
-
-In case you need to roll back to the previous version, you can run:
-
-```
-$ rake db:rollback
+$ mysql -u <username> -p <password> reporting < db/schema.sql
 ```
 
 ## Running the server
