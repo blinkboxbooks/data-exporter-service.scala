@@ -14,7 +14,7 @@ import javax.sql.DataSource
 import java.util.concurrent.TimeUnit
 import it.sauronsoftware.cron4j.Scheduler
 
-object DataExportingService extends App with Logging {
+object DataExporterService extends App with Logging {
 
   import ShopSchema._
   import ClubcardSchema._
@@ -22,7 +22,7 @@ object DataExportingService extends App with Logging {
   import DbUtils._
 
   val config = ConfigFactory.load("data-exporter-service")
-  val bufferSize = config.getInt("exporter.jdbc.batchsize")
+  val batchSize = config.getInt("exporter.jdbc.batchsize")
   implicit val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
 
   // Configure datasources for reading and writing.
@@ -32,7 +32,7 @@ object DataExportingService extends App with Logging {
 
   if (args.contains("--now")) {
     logger.info("Starting one-off export")
-    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
+    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize)
     logger.info("Completed export")
   } else {
     val cronStr = config.getString("exporter.schedule")
@@ -41,7 +41,7 @@ object DataExportingService extends App with Logging {
     scheduler.schedule(cronStr, new Runnable() {
       override def run() {
         logger.info("Starting scheduled export")
-        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, bufferSize)
+        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize)
         logger.info("Completed scheduled export")
       }
     })
@@ -55,7 +55,7 @@ object DataExportingService extends App with Logging {
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
     bufferSize: Int)(implicit timeout: Duration) = {
 
-    // The global/default singleton session factory (yuck) refers to the shop database.
+    // The default session factory refers to the shop database.
     SessionFactory.concreteFactory =
       Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
     SessionFactory.newSession.bindToCurrentThread
@@ -118,7 +118,7 @@ object DataExportingService extends App with Logging {
 
     observable.subscribe(
       entities => using(outputSession) { output.insert(entities); count += 1 /*entities.size*/ },
-      e => { p.failure(e); e.printStackTrace(System.err) },
+      e => { p.failure(e) },
       () => p.success())
 
     Await.result(p.future, timeout)

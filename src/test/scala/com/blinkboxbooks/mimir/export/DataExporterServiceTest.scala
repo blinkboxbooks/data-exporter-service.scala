@@ -32,24 +32,23 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   var reportingDbSession: Session = _
 
   // Test data.
-  val book1 = book("isbn1", "pub1")
-  val book2 = book("isbn2", "pub2").copy(description = Some("descr 2"))
-  val publisher1 = publisher(1, book1.publisherId)
-  val publisher2 = publisher(2, book2.publisherId)
-  val currencyRates = List(new CurrencyRate("GBP", "EUR", 1.2315),
-    new CurrencyRate("GBP", "USD", 1.3069),
-    new CurrencyRate("GBP", "JPY", 132.4146))
-
+  val books = List(book("isbn1", "pub1"), book("isbn2", "pub2").copy(description = Some("descr 2")))
+  val publishers = List(publisher(1, books(0).publisherId), publisher(2, books(1).publisherId))
   val contributors = List(new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson")),
     new Contributor(22, "Leo", Some("Leo"), Some("Tolstoy")))
 
   val genres = List(new Genre(1, None, Some("FIC00000"), Some("Fiction")),
     new Genre(2, Some(1), Some("FIC00002"), Some("Pulp Fiction")),
     new Genre(3, Some(1), Some("FIC00003"), Some("Highbrow Fiction")))
-  val bookGenres = List(new MapBookToGenre(book1.id, genres(0).id),
-    new MapBookToGenre(book2.id, genres(1).id))
-  val bookContributors = List(new MapBookToContributor(contributors(0).id, book1.id, 0),
-    new MapBookToContributor(contributors(1).id, book2.id, 1))
+  val bookGenres = List(new MapBookToGenre(books(0).id, genres(0).id),
+    new MapBookToGenre(books(1).id, genres(1).id))
+
+  val bookContributors = List(new MapBookToContributor(contributors(0).id, books(0).id, 0),
+    new MapBookToContributor(contributors(1).id, books(1).id, 1))
+
+  val currencyRates = List(new CurrencyRate("GBP", "EUR", 1.2315),
+    new CurrencyRate("GBP", "USD", 1.3069),
+    new CurrencyRate("GBP", "JPY", 132.4146))
 
   before {
     initOutputDb()
@@ -65,15 +64,25 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
 
-    DataExportingService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+
+    checkSuccessfulExport()
+  }
+
+  test("Buffer size of 1 should produce same results as with larger batches") {
+    val shopDatasource = testDatasource("shop")
+    val clubcardDatasource = testDatasource("clubcard")
+    val outputDatasource = testDatasource("reporting")
+
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1)
 
     checkSuccessfulExport()
   }
 
   def checkSuccessfulExport() {
     using(reportingDbSession) {
-      assert(from(booksOutput)(select(_)).toList === List(book1, book2))
-      assert(from(publishersOutput)(select(_)).toList === List(publisher1, publisher2))
+      assert(from(booksOutput)(select(_)).toList === books)
+      assert(from(publishersOutput)(select(_)).toList === publishers)
       assert(from(contributorsOutput)(select(_)).toList === contributors)
       assert(from(contributorRolesOutput)(select(_)).toList === bookContributors)
 
@@ -85,16 +94,6 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       assert(from(genresOutput)(select(_)).toList === genres)
       assert(from(bookGenresOutput)(select(_)).toList === bookGenres)
     }
-  }
-
-  test("Buffer size of 1 should produce same results as with larger batches") {
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-
-    DataExportingService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1)
-
-    checkSuccessfulExport()
   }
 
   test("Can't access input database") {
@@ -109,7 +108,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExportingService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -128,11 +127,37 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExportingService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
     checkOutputUnchanged()
+  }
+
+  test("Successful copy to table") {
+    using(reportingDbSession) {
+      currencyRatesOutput.deleteWhere(r => 1 === 1)
+      DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate])(
+        reportingDbSession, timeout)
+      assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
+    }
+  }
+
+  test("Copy to table when input throws exception") {
+    using(reportingDbSession) {
+      currencyRatesOutput.deleteWhere(r => 1 === 1)
+      // For input, use a stream of objects that throws an exception after the first couple of results.
+      val ex = new SQLException("Test exception")
+      def failure[T]: T = throw ex
+      val failingSequence = currencyRates(0) #:: failure[CurrencyRate] #:: currencyRates(1) #:: Stream.empty
+      val thrown = intercept[SQLException] {
+        DataExporterService.copy(failingSequence, currencyRatesOutput, identity[CurrencyRate])(
+          reportingDbSession, timeout)
+      }
+      assert(thrown eq ex, "Should pass on underlying exception")
+      assert(from(currencyRatesOutput)(select(_)).toList ===
+        List(currencyRates(0)), "Should have stopped updates on failure")
+    }
   }
 
   private def initOutputDb() = {
@@ -142,9 +167,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
     // Add interesting content to input tables.
     using(shopDbSession) {
-      List(book1, book2).foreach { bookData.insert(_) }
-      List(publisher1, publisher2)
-        .foreach { publisherData.insert(_) }
+      books.foreach { bookData.insert(_) }
+      publishers.foreach { publisherData.insert(_) }
       contributors.foreach { contributorData.insert(_) }
       bookContributors.foreach { mapBookContributorData.insert(_) }
       genres.foreach { genreData.insert(_) }
@@ -186,13 +210,18 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   private def checkOutputUnchanged() {
     using(reportingDbSession) {
-      assert(from(booksOutput)(b => select(b)).toList.size == 1)
-      assert(from(publishersOutput)(b => select(b)).toList.size == 1, s"Got: ${from(publishersOutput)(b => select(b)).toList.size}")
-      assert(from(userClubcardsOutput)(b => select(b)).toList.size == 1, s"Got: ${from(userClubcardsOutput)(b => select(b)).toList.size}")
+      assert(from(booksOutput)(select(_)).toList.size == 1)
+      assert(from(publishersOutput)(select(_)).toList.size == 1)
+      assert(from(userClubcardsOutput)(select(_)).toList.size == 1)
+      assert(from(currencyRatesOutput)(select(_)).toList.size == 1)
+      assert(from(contributorsOutput)(select(_)).toList.size == 1)
+      assert(from(contributorRolesOutput)(select(_)).toList.size == 1)
+      assert(from(genresOutput)(select(_)).toList.size == 1)
+      assert(from(bookGenresOutput)(select(_)).toList.size == 1)
     }
   }
 
-  /** Create a datasource that points at the right H2 database. */
+  /** Create a datasource that points at a named H2 database. */
   private def testDatasource(name: String) = {
     val datasource = new BasicDataSource
     datasource.setUrl(url(name))

@@ -5,7 +5,7 @@ import org.squeryl.Schema
 import org.squeryl.PrimitiveTypeMode._
 
 // 
-// Objects for input schemas.
+// Objects for schemas.
 //
 case class Book(id: String, publisherId: String, publicationDate: Date,
   title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
@@ -165,6 +165,6 @@ object ReportingSchema extends Schema {
     g.genreId is (named("genre_id")),
     g.isbn is (dbType("VARCHAR(13)"))))
 
-  printDdl(str => println(str))
+  //  printDdl(str => println(str))
 
 }
