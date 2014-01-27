@@ -36,6 +36,10 @@ parallelExecution := false
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
+// Add current working directory to classpath for JAR file.
+packageOptions in (Compile, packageBin) +=
+    Package.ManifestAttributes( java.util.jar.Attributes.Name.CLASS_PATH -> "." )
+
 // Leave out bits we don't care about.
 publishArtifact in (Compile, packageDoc) := false
 
