@@ -68,15 +68,17 @@ against the desired database server. For example:
 $ mysql -u <username> -p <password> reporting < db/schema.sql
 ```
 
-## Running the server
+## Running the service
 
+To run the service, you need to provide it with configuration, typically as a properties file.
+An example file is in src/main/resources/data-exporting-service.properties.example.
+Edit this as necessary, then put it in the directory you'll be running the service from.  
 
-To run the service, use a command like:
+To start the service, use a command like:
 
 ```
-$ java -cp .:data-export-service-assembly-1.0.jar com.blinkboxbooks.mimir.export.DataExportService
+$ java -jar data-export-service-assembly-1.0.jar
 ```
 
-Note that this example includes the current directory "." on the classpath, in which 
-case properties files will be picked up from there.
-
+Note that the current directory "." is included on the classpath of the built jar file, so
+you can run the service by putting the properties file here.
