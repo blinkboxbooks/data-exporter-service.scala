@@ -5,6 +5,7 @@ import javax.sql.DataSource
 import org.squeryl.Session
 import org.squeryl.adapters.MySQLAdapter
 import com.typesafe.config.Config
+import scala.util.control.NonFatal
 
 object DbUtils {
 
@@ -35,9 +36,9 @@ object DbUtils {
       fn(session)
       connection.commit()
     } catch {
-      case t: Throwable => {
+      case NonFatal(e) => {
         connection.rollback()
-        throw t
+        throw e
       }
     } finally {
       connection.close()
