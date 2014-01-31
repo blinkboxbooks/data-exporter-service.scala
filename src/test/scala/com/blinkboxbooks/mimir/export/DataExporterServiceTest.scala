@@ -26,6 +26,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   import ReportingSchema._
 
   implicit val timeout = 10 seconds
+  implicit val batchSize = 100
 
   var shopDbSession: Session = _
   var clubcardDbSession: Session = _
@@ -64,7 +65,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
 
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
 
     checkSuccessfulExport()
   }
@@ -74,7 +75,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
 
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1)
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1, timeout)
 
     checkSuccessfulExport()
   }
@@ -108,7 +109,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -127,7 +128,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 100)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -145,8 +146,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   def testCopyToTable(batchSize: Int) {
     using(reportingDbSession) {
       currencyRatesOutput.deleteWhere(r => 1 === 1)
-      DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate], 100)(
-        reportingDbSession, timeout)
+      DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate])(
+        batchSize, reportingDbSession, timeout)
       assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
     }
   }
@@ -159,8 +160,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       def failure[T]: T = throw ex
       val failingSequence = currencyRates(0) #:: failure[CurrencyRate] #:: currencyRates(1) #:: Stream.empty
       val thrown = intercept[SQLException] {
-        DataExporterService.copy(failingSequence, currencyRatesOutput, identity[CurrencyRate], 1)(
-          reportingDbSession, timeout)
+        DataExporterService.copy(failingSequence, currencyRatesOutput, identity[CurrencyRate])(
+          1, reportingDbSession, timeout)
       }
       assert(thrown eq ex, "Should pass on underlying exception")
       assert(from(currencyRatesOutput)(select(_)).toList ===

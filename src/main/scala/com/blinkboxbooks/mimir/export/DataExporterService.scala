@@ -23,7 +23,7 @@ object DataExporterService extends App with Logging {
 
   val config = ConfigFactory.load("data-exporter-service")
   val batchSize = config.getInt("exporter.jdbc.batchsize")
-  implicit val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
+  val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
 
   // Configure datasources for reading and writing.
   val shopDatasource = createDatasource("shop", config)
@@ -32,7 +32,7 @@ object DataExporterService extends App with Logging {
 
   if (args.contains("--now")) {
     logger.info("Starting one-off export")
-    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize)
+    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
     logger.info("Completed export")
   } else {
     val cronStr = config.getString("exporter.schedule")
@@ -41,7 +41,7 @@ object DataExporterService extends App with Logging {
     scheduler.schedule(cronStr, new Runnable() {
       override def run() {
         logger.info("Starting scheduled export")
-        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize)
+        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
         logger.info("Completed scheduled export")
       }
     })
@@ -53,8 +53,11 @@ object DataExporterService extends App with Logging {
    * Perform all the data export jobs.
    */
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
-    batchSize: Int)(implicit timeout: Duration) = {
+    batchSize: Int, timeout: Duration) = {
 
+    implicit val t = timeout
+    implicit val b = batchSize
+    
     // The default session factory refers to the shop database.
     SessionFactory.concreteFactory =
       Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
@@ -75,13 +78,13 @@ object DataExporterService extends App with Logging {
       }
 
       // Write new snapshots. Copy these sequentially, in the same transaction. 
-      copy(from(bookData)(select(_)), booksOutput, identity[Book], batchSize)
-      copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher], batchSize)
-      copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor], batchSize)
-      copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor], batchSize)
-      copy(from(genreData)(select(_)), genresOutput, identity[Genre], batchSize)
-      copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre], batchSize)
-      copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate], batchSize)
+      copy(from(bookData)(select(_)), booksOutput, identity[Book])
+      copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
+      copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor])
+      copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
+      copy(from(genreData)(select(_)), genresOutput, identity[Genre])
+      copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
+      copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
 
       withReadOnlySession(clubcardDatasource)(clubcardSession => {
         using(clubcardSession) {
@@ -91,7 +94,7 @@ object DataExporterService extends App with Logging {
                 select (clubcard, user))
           val converter = (cu: (Clubcard, ClubcardUser)) =>
             new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-          copy(clubcardResults, userClubcardsOutput, converter, batchSize)
+          copy(clubcardResults, userClubcardsOutput, converter)
         }
       })
     })
@@ -105,8 +108,8 @@ object DataExporterService extends App with Logging {
    * batched writes, for performance. The overall copy job is synchronous, in that it will wait for
    * the copying to complete before returning.
    */
-  def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, bufferSize: Int)(
-    implicit outputSession: Session, timeout: Duration) = {
+  def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2)(
+    implicit bufferSize: Int, outputSession: Session, timeout: Duration) = {
 
     logger.info(s"Executing data export to table ${output.name}")
 
