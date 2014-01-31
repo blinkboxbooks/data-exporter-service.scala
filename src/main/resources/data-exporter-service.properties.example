@@ -1,0 +1,29 @@
+# Data exporter service configuration.
+
+# Specifies schedule for data export, in cron format.
+# For example, the following runs the job every 2 minutes(!)
+# exporter.schedule=*/2 * * * *
+# This one runs the job at 3 am every day:
+exporter.schedule=00 3 * * *
+
+# General database settings.
+exporter.jdbc.timeout.s=300
+exporter.jdbc.batchsize=5000
+
+# Database used for reporting.
+reporting.jdbc.driver=com.mysql.jdbc.Driver
+reporting.jdbc.url=jdbc:mysql://localhost/reporting
+reporting.jdbc.username=gospoken
+reporting.jdbc.password=gospoken
+
+# Database for shop data.
+shop.jdbc.driver=com.mysql.jdbc.Driver
+shop.jdbc.url=jdbc:mysql://localhost/shop
+shop.jdbc.username=gospoken
+shop.jdbc.password=gospoken
+
+# Database for Clubcard data.
+clubcard.jdbc.driver=com.mysql.jdbc.Driver
+clubcard.jdbc.url=jdbc:mysql://localhost/clubcard
+clubcard.jdbc.username=gospoken
+clubcard.jdbc.password=gospoken
