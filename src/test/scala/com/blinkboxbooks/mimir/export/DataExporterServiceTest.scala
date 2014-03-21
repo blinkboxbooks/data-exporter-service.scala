@@ -202,7 +202,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     }
   }
 
-  private def publisher(id: Int, name: String, ebookDiscount: Int = 20,
+  private def publisher(id: Int, name: String, ebookDiscount: Float = 0.2f,
     implementsAgencyPricingModel: Boolean = false, countryCode: Option[String] = None) =
     new Publisher(id, name, ebookDiscount, implementsAgencyPricingModel, countryCode)
 

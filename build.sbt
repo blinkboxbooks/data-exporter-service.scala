@@ -1,6 +1,6 @@
 name := """data-exporter-service"""
 
-version := "1.0.0"
+version := "1.0.1"
 
 organization := "com.blinkboxbooks.platform.services"
 
