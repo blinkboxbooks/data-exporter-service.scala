@@ -11,7 +11,7 @@ case class Book(id: String, publisherId: String, publicationDate: Date,
   title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
   def this() = this("", "", new Date(0), "", None, None, 0)
 }
-case class Publisher(id: Int, name: String, ebookDiscount: Int,
+case class Publisher(id: Int, name: String, ebookDiscount: Float,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
   def this() = this(0, "", 0, false, None)
 }
