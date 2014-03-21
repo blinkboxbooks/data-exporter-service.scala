@@ -45,6 +45,8 @@ object ShopSchema extends Schema {
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
     b.publicationDate is (named("publication_date")),
+    // Shop DB has longer size of this field than the reporting DB, hence replicate this in tests.
+    b.description is dbType(s"varchar(65535)"),
     b.languageCode is (named("language_code")),
     b.numberOfSections is (named("num_sections"))))
 
@@ -118,13 +120,15 @@ case class UserClubcardInfo(cardId: String, userId: Int) {
 
 object ReportingSchema extends Schema {
 
+  val MAX_DESCRIPTION_LENGTH = 30000
+
   val booksOutput = table[Book]("books")
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
     b.publicationDate is (named("publication_date"), dbType("DATE")),
-    b.title is (dbType("VARCHAR(255)")),
-    b.description is (dbType("VARCHAR(30000)")),
+    b.title is dbType("VARCHAR(255)"),
+    b.description is dbType(s"varchar($MAX_DESCRIPTION_LENGTH)"),
     b.languageCode is (named("language_code"), dbType("CHAR(2)")),
     b.numberOfSections is (named("number_of_sections"))))
 

@@ -78,7 +78,7 @@ object DataExporterService extends App with Logging {
       }
 
       // Write new snapshots. Copy these sequentially, in the same transaction. 
-      copy(from(bookData)(select(_)), booksOutput, identity[Book])
+      copy(from(bookData)(select(_)), booksOutput, truncate)
       copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
       copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor])
       copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
@@ -127,5 +127,11 @@ object DataExporterService extends App with Logging {
     Await.result(p.future, timeout)
     logger.info(s"Completed export of $count rows")
   }
+
+  /**
+   *  Limit description field as that's potentially bigger in the incoming database - the Shop DB version allows
+   *  longer varchars than the reporting database allows.
+   */
+  def truncate(book: Book): Book = book.copy(description = book.description.map(_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)))
 
 }
