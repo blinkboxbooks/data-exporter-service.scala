@@ -41,8 +41,12 @@ object DataExporterService extends App with Logging {
     scheduler.schedule(cronStr, new Runnable() {
       override def run() {
         logger.info("Starting scheduled export")
-        runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
-        logger.info("Completed scheduled export")
+        try {
+          runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+          logger.info("Completed scheduled export")
+        } catch {
+          case e: Exception => logger.error("Failed data export", e)
+        }
       }
     })
     scheduler.setDaemon(false)
@@ -57,7 +61,7 @@ object DataExporterService extends App with Logging {
 
     implicit val t = timeout
     implicit val b = batchSize
-    
+
     // The default session factory refers to the shop database.
     SessionFactory.concreteFactory =
       Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
