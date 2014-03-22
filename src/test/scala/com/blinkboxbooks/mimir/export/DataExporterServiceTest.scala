@@ -169,6 +169,35 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     }
   }
 
+  test("Truncate book details") {
+    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"), 10)
+    val t = DataExporterService.truncate(b)
+    assert(b.description.get.size > ReportingSchema.MAX_DESCRIPTION_LENGTH)
+    assert(t.description.get.size == ReportingSchema.MAX_DESCRIPTION_LENGTH)
+    assert(t.id == b.id)
+    assert(t.publisherId == b.publisherId)
+    assert(t.title == b.title)
+    assert(t.languageCode == b.languageCode)
+    assert(t.numberOfSections == b.numberOfSections)
+    assert(t.publicationDate == b.publicationDate)
+  }
+
+  test("Save book with an enormous description") {
+    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"), 10)
+    using(shopDbSession) {
+      bookData.insert(book)
+    }
+    val shopDatasource = testDatasource("shop")
+    val clubcardDatasource = testDatasource("clubcard")
+    val outputDatasource = testDatasource("reporting")
+
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1, timeout)
+
+    using(reportingDbSession) {
+      assert(from(booksOutput)(select(_)).toList.size == books.size + 1)
+    }
+  }
+
   private def initOutputDb() = {
     shopDbSession = createSession("shop") { ShopSchema.drop; ShopSchema.create }
     clubcardDbSession = createSession("clubcard") { ClubcardSchema.drop; ClubcardSchema.create }
