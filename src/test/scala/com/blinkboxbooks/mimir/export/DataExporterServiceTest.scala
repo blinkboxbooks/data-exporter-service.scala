@@ -235,10 +235,10 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     implementsAgencyPricingModel: Boolean = false, countryCode: Option[String] = None) =
     new Publisher(id, name, ebookDiscount, implementsAgencyPricingModel, countryCode)
 
-  private def book(id: String, publisherId: String, publicationDate: Date = date(),
+  private def book(id: String, publisherId: String, coverUrl: String = "http://media.bbb.com/test.png", publicationDate: Date = date(),
     title: String = "title", description: Option[String] = None, languageCode: Option[String] = None,
     numberOfSections: Int = 42) =
-    new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections)
+    new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections, coverUrl)
 
   private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String) {
     clubcards.insert(new Clubcard(cardId, cardNumber))
