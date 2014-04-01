@@ -36,8 +36,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   // Test data.
   val books = List(book("isbn1", "pub1"), book("isbn2", "pub2").copy(description = Some("descr 2")))
   val publishers = List(publisher(1, books(0).publisherId), publisher(2, books(1).publisherId))
-  val contributors = List(new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson")),
-    new Contributor(22, "Leo", Some("Leo"), Some("Tolstoy")))
+  val contributors = List(new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson"), "guidbryson", None, None),
+    new Contributor(22, "Leo", Some("Leo"), Some("Tolstoy"), "guidtolstoy", None, None))
 
   val genres = List(new Genre(1, None, Some("FIC00000"), Some("Fiction")),
     new Genre(2, Some(1), Some("FIC00002"), Some("Pulp Fiction")),
@@ -64,22 +64,12 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Successful export") {
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
-
+    runDataExporter()
     checkSuccessfulExport()
   }
 
   test("Batch size of 1 should produce same results as with larger batches") {
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1, timeout)
-
+    runDataExporter(1)
     checkSuccessfulExport()
   }
 
@@ -195,12 +185,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       bookData.insert(book)
       bookMediaData.insert(bookMedia)
     }
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
-
+    runDataExporter(2)
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toList.size == books.size + 1)
     }
@@ -215,11 +200,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(shopDbSession){
       bookData.insert(book)
     }
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
-
+    runDataExporter(2)
     using(reportingDbSession) {
       val actual = from(booksOutput)(select(_)).toList
       assert(actual.size == books.size + 1)
@@ -229,7 +210,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Save a book with a null cover url"){
-    // this should also never happen - shop schema says url field must not be null
+    // this should also never happen - shop db schema says url field must not be null
     val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
       10, "")
     val badBookMedia = BookMedia(42, book.id, None, 0)
@@ -237,16 +218,47 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       bookData.insert(book)
       bookMediaData.insert(badBookMedia)
     }
-    val shopDatasource = testDatasource("shop")
-    val clubcardDatasource = testDatasource("clubcard")
-    val outputDatasource = testDatasource("reporting")
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
+    runDataExporter(2)
     using(reportingDbSession) {
       val actual = from(booksOutput)(select(_)).toList
       assert(actual.size == books.size + 1)
       assert(actual.contains(book))
     }
 
+  }
+
+  test("Save a contributor with various fields missing"){
+    val c1 = newContributor(42, "testContributor42", "guid42", "http://testurl.bbb.com", Some("http://media.bbb.com/guid42.jpg"))
+    val c2 = newContributor(43, "testContributor43", "guid43")
+    using(shopDbSession){ contributorData.insert(Set(c1, c2)) }
+    runDataExporter(2)
+    using(reportingDbSession) {
+      org.squeryl.Session.currentSession.setLogger({str => logger.info(str)})
+      val actual = from(contributorsOutput)(select(_)).toSet
+      assert(actual.size == contributors.size + 2)
+      assert(actual.contains(c1))
+      assert(actual.contains(c2))
+    }
+  }
+
+  test("Contributor url is constructed from the contributor's guid and full name"){
+    val inShopDb = newContributor(43, "T.S. McTést Face", "guid43")
+    using(shopDbSession){ contributorData.insert(inShopDb)}
+    runDataExporter()
+    using(reportingDbSession) {
+      val actual = from(contributorsOutput)(cont => where(cont.id === inShopDb.id) select(cont)).head
+      val cleanedName = "ts-mctest-face"
+      val expected_url = "http://www.blinkboxbooks.com/#!/author/" + inShopDb.guid + "/" + cleanedName
+      logger.info("actual: " + actual.url.get + " expected: " + expected_url)
+      assert(actual.url.get == expected_url)
+    }
+  }
+
+  private def runDataExporter(batchSize: Int = batchSize) = {
+    val shopDatasource = testDatasource("shop")
+    val clubcardDatasource = testDatasource("clubcard")
+    val outputDatasource = testDatasource("reporting")
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
   }
 
   private def initOutputDb() = {
@@ -281,6 +293,10 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       genresOutput.insert(new Genre())
       bookGenresOutput.insert(new MapBookToGenre())
     }
+  }
+
+  private def newContributor(id: Int, fullname: String, guid: String, url: String = "http://testurl.bbb.com", imageUrl: Option[String] = None) = {
+    Contributor(id, fullname, None, None, guid, Some(url), imageUrl)
   }
 
   private def publisher(id: Int, name: String, ebookDiscount: Float = 0.2f,
