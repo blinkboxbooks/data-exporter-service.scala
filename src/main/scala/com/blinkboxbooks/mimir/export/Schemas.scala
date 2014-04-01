@@ -30,6 +30,10 @@ case class Contributor(id: Int, fullName: String, firstName: Option[String], las
 case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
   def this() = this(0, "", 0)
 }
+//dat_book_media type(aliased to kind) 0 = cover, 1 = full epub, 2 = sample epub
+case class BookMedia(id: Int, isbn: String, url: Option[String], kind: Int){
+  def this() = this(0, "", Some(""), 0)
+}
 
 // 
 // Input schema definitions. 
@@ -81,6 +85,14 @@ object ShopSchema extends Schema {
     e.fromCurrency is (named("from_currency")),
     e.toCurrency is (named("to_currency"))))
 
+  val bookMediaData = table[BookMedia]("dat_book_media")
+  on(bookMediaData)(m => declare(
+    m.id is named("id"),
+    m.isbn is named("isbn"),
+    m.url is named("url"),
+    m.kind is named("type")
+  ))
+
 }
 
 case class Clubcard(id: Int, cardNumber: String) {
@@ -130,7 +142,8 @@ object ReportingSchema extends Schema {
     b.title is dbType("VARCHAR(255)"),
     b.description is dbType(s"varchar($MAX_DESCRIPTION_LENGTH)"),
     b.languageCode is (named("language_code"), dbType("CHAR(2)")),
-    b.numberOfSections is (named("number_of_sections"))))
+    b.numberOfSections is (named("number_of_sections")),
+    b.coverUrl is named("cover_url")))
 
   val publishersOutput = table[Publisher]("publishers")
   on(publishersOutput)(p => declare(

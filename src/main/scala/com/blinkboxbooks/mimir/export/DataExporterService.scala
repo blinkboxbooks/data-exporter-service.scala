@@ -82,13 +82,28 @@ object DataExporterService extends App with Logging {
       }
 
       // Write new snapshots. Copy these sequentially, in the same transaction. 
-      copy(from(bookData)(select(_)), booksOutput, truncate)
+
       copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
       copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor])
       copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
       copy(from(genreData)(select(_)), genresOutput, identity[Genre])
       copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
       copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+
+      withReadOnlySession(shopDatasource)(shopSession => {
+        using(shopSession){
+        val bookResults =
+           join(bookData, bookMediaData.leftOuter)((book, media) =>
+             where(media.map(_.kind) === 0 or(media.map(_.kind) isNull))
+             select(book, media.getOrElse(new BookMedia(1, book.id, Some(""), 0)))
+             on(book.id === media.map(_.isbn).get)
+           )
+          val converter = (b: (Book, BookMedia)) =>
+            new Book(b._1.id, b._1.publisherId, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
+              b._1.languageCode, b._1.numberOfSections, b._2.url.getOrElse(""))
+          copy(bookResults, booksOutput, converter)
+        }
+      })
 
       withReadOnlySession(clubcardDatasource)(clubcardSession => {
         using(clubcardSession) {

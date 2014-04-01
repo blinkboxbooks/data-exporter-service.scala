@@ -14,12 +14,13 @@ import org.squeryl.PrimitiveTypeMode._
 import org.apache.commons.dbcp.BasicDataSource
 import org.mockito.Mockito._
 import org.mockito.Matchers._
+import com.typesafe.scalalogging.slf4j.Logging
 
 /**
  * Functional tests for export functionality.
  */
 @RunWith(classOf[JUnitRunner])
-class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter with MockitoSugar {
+class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter with MockitoSugar with Logging {
 
   import ShopSchema._
   import ClubcardSchema._
@@ -50,6 +51,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   val currencyRates = List(new CurrencyRate("GBP", "EUR", 1.2315),
     new CurrencyRate("GBP", "USD", 1.3069),
     new CurrencyRate("GBP", "JPY", 132.4146))
+
+  val bookMedia = List(bookMediaCover(0, books(0).id), bookMediaCover(1, books(1).id))
 
   before {
     initOutputDb()
@@ -82,18 +85,18 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   def checkSuccessfulExport() {
     using(reportingDbSession) {
-      assert(from(booksOutput)(select(_)).toList === books)
-      assert(from(publishersOutput)(select(_)).toList === publishers)
-      assert(from(contributorsOutput)(select(_)).toList === contributors)
-      assert(from(contributorRolesOutput)(select(_)).toList === bookContributors)
+      assert(from(booksOutput)(select(_)).toSet === books.toSet)
+      assert(from(publishersOutput)(select(_)).toSet === publishers.toSet)
+      assert(from(contributorsOutput)(select(_)).toSet === contributors.toSet)
+      assert(from(contributorRolesOutput)(select(_)).toSet === bookContributors.toSet)
 
-      assert(from(userClubcardsOutput)(select(_)).toList === List(
+      assert(from(userClubcardsOutput)(select(_)).toSet === Set(
         new UserClubcardInfo("card1", 101), new UserClubcardInfo("card2", 102)))
 
-      assert(from(currencyRatesOutput)(select(_)).toList === currencyRates)
+      assert(from(currencyRatesOutput)(select(_)).toSet === currencyRates.toSet)
 
-      assert(from(genresOutput)(select(_)).toList === genres)
-      assert(from(bookGenresOutput)(select(_)).toList === bookGenres)
+      assert(from(genresOutput)(select(_)).toSet === genres.toSet)
+      assert(from(bookGenresOutput)(select(_)).toSet === bookGenres.toSet)
     }
   }
 
@@ -170,7 +173,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Truncate book details") {
-    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"), 10)
+    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"),
+      10, "http://media.bbb.com/blah.png")
     val t = DataExporterService.truncate(b)
     assert(b.description.get.size > ReportingSchema.MAX_DESCRIPTION_LENGTH)
     assert(t.description.get.size == ReportingSchema.MAX_DESCRIPTION_LENGTH)
@@ -183,19 +187,66 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Save book with an enormous description") {
-    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"), 10)
+    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"),
+      10, "http://media.bbb.com/foobar.png")
+
+    val bookMedia = BookMedia(4, book.id, Some("http://media.bbb.com/foobar.png"), 0)
     using(shopDbSession) {
       bookData.insert(book)
+      bookMediaData.insert(bookMedia)
     }
     val shopDatasource = testDatasource("shop")
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
 
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 1, timeout)
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
 
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toList.size == books.size + 1)
     }
+  }
+
+  test("Save a book with no cover url record"){
+    // save and export a book without the cover_url row in dat_book_media
+    // "This should never happen" - JP
+
+    val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
+      10, "")
+    using(shopDbSession){
+      bookData.insert(book)
+    }
+    val shopDatasource = testDatasource("shop")
+    val clubcardDatasource = testDatasource("clubcard")
+    val outputDatasource = testDatasource("reporting")
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
+
+    using(reportingDbSession) {
+      val actual = from(booksOutput)(select(_)).toList
+      assert(actual.size == books.size + 1)
+      assert(actual.contains(book))
+    }
+
+  }
+
+  test("Save a book with a null cover url"){
+    // this should also never happen - shop schema says url field must not be null
+    val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
+      10, "")
+    val badBookMedia = BookMedia(42, book.id, None, 0)
+    using(shopDbSession){
+      bookData.insert(book)
+      bookMediaData.insert(badBookMedia)
+    }
+    val shopDatasource = testDatasource("shop")
+    val clubcardDatasource = testDatasource("clubcard")
+    val outputDatasource = testDatasource("reporting")
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, 2, timeout)
+    using(reportingDbSession) {
+      val actual = from(booksOutput)(select(_)).toList
+      assert(actual.size == books.size + 1)
+      assert(actual.contains(book))
+    }
+
   }
 
   private def initOutputDb() = {
@@ -212,6 +263,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
       genres.foreach { genreData.insert(_) }
       bookGenres.foreach { bookGenreData.insert(_) }
       currencyRates.foreach { currencyRateData.insert(_) }
+      bookMedia.foreach { bookMediaData.insert(_) }
     }
     using(clubcardDbSession) {
       insertClubcardForUser(101, 1001, "card1")
@@ -283,6 +335,11 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     cal.set(Calendar.SECOND, 0)
     cal.set(Calendar.MILLISECOND, 0)
     new Date(cal.getTime().getTime())
+  }
+
+  private def bookMediaCover(id: Int, isbn: String) = {
+    //dat_book_media type 0 = cover, 1 = full epub, 2 = sample epub
+    new BookMedia(id, isbn, Some("http://media.bbb.com/test.png"), 0)
   }
 
 }
