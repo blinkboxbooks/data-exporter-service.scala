@@ -84,7 +84,6 @@ object DataExporterService extends App with Logging {
       // Write new snapshots. Copy these sequentially, in the same transaction. 
 
       copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
-      copy(from(contributorData)(select(_)), contributorsOutput, identity[Contributor])
       copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
       copy(from(genreData)(select(_)), genresOutput, identity[Genre])
       copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
@@ -92,16 +91,24 @@ object DataExporterService extends App with Logging {
 
       withReadOnlySession(shopDatasource)(shopSession => {
         using(shopSession){
-        val bookResults =
-           join(bookData, bookMediaData.leftOuter)((book, media) =>
-             where(media.map(_.kind) === 0 or(media.map(_.kind) isNull))
-             select(book, media.getOrElse(new BookMedia(1, book.id, Some(""), 0)))
-             on(book.id === media.map(_.isbn).get)
-           )
+          val bookResults =
+             join(bookData, bookMediaData.leftOuter)((book, media) =>
+               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or(media.map(_.kind) isNull))
+               select(book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
+               on(book.id === media.map(_.isbn).get)
+             )
           val converter = (b: (Book, BookMedia)) =>
             new Book(b._1.id, b._1.publisherId, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
               b._1.languageCode, b._1.numberOfSections, b._2.url.getOrElse(""))
           copy(bookResults, booksOutput, converter)
+        }
+      })
+
+      withReadOnlySession(shopDatasource)(shopSession => {
+        using(shopSession){
+          val converter = (c: (Contributor)) =>
+            new Contributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, Contributor.generate_url(c.guid, c.fullName), BookMedia.fullsize_jpg_url(c.imageUrl))
+          copy(from(contributorData)(select(_)), contributorsOutput, converter)
         }
       })
 
