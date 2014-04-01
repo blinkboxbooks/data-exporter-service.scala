@@ -24,15 +24,40 @@ case class MapBookToGenre(isbn: String, genreId: Int) {
 case class CurrencyRate(fromCurrency: String, toCurrency: String, rate: BigDecimal) {
   def this() = this("", "", 0)
 }
-case class Contributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String]) {
-  def this() = this(0, "", None, None)
+case class Contributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, url: Option[String], imageUrl: Option[String]) {
+  def this() = this(0, "", None, None, "", None, None)
+}
+object Contributor {
+  val BBB_LIVE_AUTHOR_BASE_URL = "https://www.blinkboxbooks.com/#!/author"
+
+  def generate_url(guid: String, fullName: String): Option[String] = {
+    val normalizedName = java.text.Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
+    Some(Array(BBB_LIVE_AUTHOR_BASE_URL, guid, normalizedName).mkString("/"))
+  }
 }
 case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
   def this() = this(0, "", 0)
 }
-//dat_book_media type(aliased to kind) 0 = cover, 1 = full epub, 2 = sample epub
 case class BookMedia(id: Int, isbn: String, url: Option[String], kind: Int){
   def this() = this(0, "", Some(""), 0)
+}
+// Database enum values
+object BookMedia {
+  val BOOK_COVER_MEDIA_ID = 0
+  val FULL_EPUB_MEDIA_ID = 1
+  val SAMPLE_EPUB_MEDIA_ID = 2
+
+  def fullsize_jpg_url(mediaUrl: Option[String]): Option[String] = {
+    if (mediaUrl.isDefined) {
+      mediaUrl.get.takeRight(4) match {
+        case ".jpg" => mediaUrl
+        case _ => mediaUrl.map(_.replaceFirst("([^/])/([^/])", "$1/params;v=0/$2") + ".jpg")
+      }
+    } else {
+      None
+    }
+  }
+
 }
 
 // 
@@ -63,9 +88,12 @@ object ShopSchema extends Schema {
 
   val contributorData = table[Contributor]("dat_contributor")
   on(contributorData)(c => declare(
+    c.guid is (named("guid")),
     c.fullName is (named("full_name")),
     c.firstName is (named("first_name")),
-    c.lastName is (named("last_name"))))
+    c.imageUrl is (named("photo")),
+    c.firstName is (named("first_name")))
+    )
 
   val mapBookContributorData = table[MapBookToContributor]("map_book_contributor")
   on(mapBookContributorData)(m => declare(

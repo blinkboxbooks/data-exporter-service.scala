@@ -27,7 +27,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   import ReportingSchema._
 
   implicit val timeout = 10 seconds
-  implicit val batchSize = 100
+  implicit val defaultBatchSize = 100
 
   var shopDbSession: Session = _
   var clubcardDbSession: Session = _
@@ -36,8 +36,10 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   // Test data.
   val books = List(book("isbn1", "pub1"), book("isbn2", "pub2").copy(description = Some("descr 2")))
   val publishers = List(publisher(1, books(0).publisherId), publisher(2, books(1).publisherId))
-  val contributors = List(new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson"), "guidbryson", None, None),
-    new Contributor(22, "Leo", Some("Leo"), Some("Tolstoy"), "guidtolstoy", None, None))
+  val contributors = List(
+    new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson"), "cf6134830c918d056a9d8292fdebd5293ea41901", Some("https://www.blinkboxbooks.com/#!/author/cf6134830c918d056a9d8292fdebd5293ea41901/bill-bryson"), Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg")),
+    new Contributor(22, "Leo Tolstoy", Some("Leo"), Some("Tolstoy"), "eee5db331fff59dc80d4d3698145f8304ef56ec8", Some("https://www.blinkboxbooks.com/#!/author/eee5db331fff59dc80d4d3698145f8304ef56ec8/leo-tolstoy"), Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg"))
+  )
 
   val genres = List(new Genre(1, None, Some("FIC00000"), Some("Fiction")),
     new Genre(2, Some(1), Some("FIC00002"), Some("Pulp Fiction")),
@@ -102,7 +104,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -121,7 +123,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -228,8 +230,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Save a contributor with various fields missing"){
-    val c1 = newContributor(42, "testContributor42", "guid42", "http://testurl.bbb.com", Some("http://media.bbb.com/guid42.jpg"))
-    val c2 = newContributor(43, "testContributor43", "guid43")
+    val c1 = newContributor(42, "I.C. Weiner", "guid42", Some("https://www.blinkboxbooks.com/#!/author/guid42/ic-weiner"), Some("https://media.blinkboxbooks.com/params;v=0/guid42.jpg.jpg"))
+    val c2 = newContributor(43, "Suq Madiiq", "guid43", Some("https://www.blinkboxbooks.com/#!/author/guid43/suq-madiiq"))
     using(shopDbSession){ contributorData.insert(Set(c1, c2)) }
     runDataExporter(2)
     using(reportingDbSession) {
@@ -248,13 +250,13 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       val actual = from(contributorsOutput)(cont => where(cont.id === inShopDb.id) select(cont)).head
       val cleanedName = "ts-mctest-face"
-      val expected_url = "http://www.blinkboxbooks.com/#!/author/" + inShopDb.guid + "/" + cleanedName
-      logger.info("actual: " + actual.url.get + " expected: " + expected_url)
-      assert(actual.url.get == expected_url)
+      val expected_url = Some("https://www.blinkboxbooks.com/#!/author/" + inShopDb.guid + "/" + cleanedName)
+      logger.info("actual: " + actual.url + " expected: " + expected_url)
+      assert(actual.url == expected_url)
     }
   }
 
-  private def runDataExporter(batchSize: Int = batchSize) = {
+  private def runDataExporter(batchSize: Int = defaultBatchSize) = {
     val shopDatasource = testDatasource("shop")
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
@@ -295,8 +297,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     }
   }
 
-  private def newContributor(id: Int, fullname: String, guid: String, url: String = "http://testurl.bbb.com", imageUrl: Option[String] = None) = {
-    Contributor(id, fullname, None, None, guid, Some(url), imageUrl)
+  private def newContributor(id: Int, fullname: String, guid: String, url: Option[String] =  None, imageUrl: Option[String] = None) = {
+    Contributor(id, fullname, None, None, guid, url, imageUrl)
   }
 
   private def publisher(id: Int, name: String, ebookDiscount: Float = 0.2f,
