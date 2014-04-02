@@ -37,23 +37,24 @@ case class BookMedia(id: Int, isbn: String, url: Option[String], kind: Int){
 // Enriched Output Classes
 // They contain additional fields that are not in the source data.
 
-case class BookWithCover(id: String, publisherId: String, publicationDate: Date, title: String, description: Option[String],
+case class OutputBook(id: String, publisherId: String, publicationDate: Date, title: String, description: Option[String],
                          languageCode: Option[String], numberOfSections: Int, coverUrl: Option[String]) {
   def this() = this("", "", new Date(0), "", None, None, 0, None)
 }
-case class ContributorWithUrls(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, imageUrl: Option[String], url: Option[String]) {
+case class OutputContributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, imageUrl: Option[String], url: Option[String]) {
   def this() = this(0, "", None, None, "", None, None)
 }
 
 
 // Database enum values
 object BookMedia {
+  import java.net.URL
   val BOOK_COVER_MEDIA_ID = 0
   val FULL_EPUB_MEDIA_ID = 1
   val SAMPLE_EPUB_MEDIA_ID = 2
 
-  def fullsize_jpg_url(mediaUrl: Option[String]):Option[String] = mediaUrl.map { url =>
-    try { new java.net.URL(url) } catch {
+  def fullsizeJpgUrl(mediaUrl: Option[String]):Option[String] = mediaUrl.map { url =>
+    try { new URL(url) } catch {
       case ex: Exception =>
         return None
     }
@@ -66,11 +67,13 @@ object BookMedia {
 
 object Contributor {
   import com.typesafe.config.ConfigFactory
+  import java.text.Normalizer
+
   val config = ConfigFactory.load("data-exporter-service")
   val AUTHOR_BASE_URL = config.getString("author.base.url")
 
-  def generate_url(guid: String, fullName: String): Option[String] = {
-    val normalizedName = java.text.Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
+  def generateContributorUrl(guid: String, fullName: String): Option[String] = {
+    val normalizedName = Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
     val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
     Some(Array(AUTHOR_BASE_URL, guid, normalizedNameWithDefault).mkString("/"))
   }
@@ -177,7 +180,7 @@ object ReportingSchema extends Schema {
 
   val MAX_DESCRIPTION_LENGTH = 30000
 
-  val booksOutput = table[BookWithCover]("books")
+  val booksOutput = table[OutputBook]("books")
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
@@ -205,7 +208,7 @@ object ReportingSchema extends Schema {
     e.fromCurrency is (named("from_currency"), dbType("VARCHAR(5)")),
     e.toCurrency is (named("to_currency"), dbType("VARCHAR(5)"))))
 
-  val contributorsOutput = table[ContributorWithUrls]("contributors")
+  val contributorsOutput = table[OutputContributor]("contributors")
   on(contributorsOutput)(c => declare(
     c.fullName is (named("full_name"), dbType("VARCHAR(256)")),
     c.firstName is (named("first_name"), dbType("VARCHAR(256)")),

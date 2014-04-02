@@ -314,11 +314,11 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       // Insert some existing data into each output table, 
       // so we can check that these get cleared on export.
-      booksOutput.insert(new BookWithCover())
+      booksOutput.insert(new OutputBook())
       publishersOutput.insert(new Publisher())
       userClubcardsOutput.insert(new UserClubcardInfo())
       currencyRatesOutput.insert(new CurrencyRate())
-      contributorsOutput.insert(new ContributorWithUrls())
+      contributorsOutput.insert(new OutputContributor())
       contributorRolesOutput.insert(new MapBookToContributor())
       genresOutput.insert(new Genre())
       bookGenresOutput.insert(new MapBookToGenre())
@@ -339,7 +339,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections)
 
   private def bookWithCover(sourceBook: Book, coverUrl: Option[String] = Some("http://media.bbb.com/params;v=0/test.png.jpg")) =
-    new BookWithCover(sourceBook.id, sourceBook.publisherId, sourceBook.publicationDate, sourceBook.title,
+    new OutputBook(sourceBook.id, sourceBook.publisherId, sourceBook.publicationDate, sourceBook.title,
       sourceBook.description, sourceBook.languageCode, sourceBook.numberOfSections, coverUrl)
 
   private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String) {
@@ -392,8 +392,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new BookMedia(id, isbn, Some("http://media.bbb.com/test.png"), 0)
   }
 
-  def addUrlToContributor(c: Contributor, url: Option[String]): ContributorWithUrls = {
-    ContributorWithUrls(c.id, c.fullName, c.firstName, c.lastName, c.guid, c.imageUrl, url)
+  def addUrlToContributor(c: Contributor, url: Option[String]): OutputContributor = {
+    OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, c.imageUrl, url)
   }
 
 }
