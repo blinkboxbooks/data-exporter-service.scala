@@ -24,6 +24,7 @@ object DataExporterService extends App with Logging {
   val config = ConfigFactory.load("data-exporter-service")
   val batchSize = config.getInt("exporter.jdbc.batchsize")
   val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
+  val authorBaseUrl = config.getString("author.base.url")
 
   // Configure datasources for reading and writing.
   val shopDatasource = createDatasource("shop", config)
@@ -57,7 +58,7 @@ object DataExporterService extends App with Logging {
    * Perform all the data export jobs.
    */
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
-    batchSize: Int, timeout: Duration) = {
+    batchSize: Int, timeout: Duration, authorBaseUrl: String = authorBaseUrl) = {
 
     implicit val t = timeout
     implicit val b = batchSize
@@ -107,7 +108,7 @@ object DataExporterService extends App with Logging {
       withReadOnlySession(shopDatasource)(shopSession => {
         using(shopSession){
           val converter = (c: (Contributor)) =>
-            new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(c.guid, c.fullName))
+            new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
           copy(from(contributorData)(select(_)), contributorsOutput, converter)
         }
       })

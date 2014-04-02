@@ -288,7 +288,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     val shopDatasource = testDatasource("shop")
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, "https://www.blinkboxbooks.com/#!/author")
   }
 
   private def initOutputDb() = {
