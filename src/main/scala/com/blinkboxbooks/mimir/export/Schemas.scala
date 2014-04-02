@@ -106,7 +106,6 @@ object ShopSchema extends Schema {
   on(contributorData)(c => declare(
     c.guid is (named("guid")),
     c.fullName is (named("full_name")),
-    c.firstName is (named("first_name")),
     c.imageUrl is (named("photo")),
     c.firstName is (named("first_name")),
     c.lastName is (named("last_name"))))
