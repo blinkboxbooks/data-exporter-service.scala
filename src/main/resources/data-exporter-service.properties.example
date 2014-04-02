@@ -27,3 +27,6 @@ clubcard.jdbc.driver=com.mysql.jdbc.Driver
 clubcard.jdbc.url=jdbc:mysql://localhost/clubcard
 clubcard.jdbc.username=gospoken
 clubcard.jdbc.password=gospoken
+
+# For Constructing url links (no trailing slash).
+author.base.url=https://www.blinkboxbooks.com/#!/author
