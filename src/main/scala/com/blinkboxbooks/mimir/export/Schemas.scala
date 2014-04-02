@@ -32,7 +32,8 @@ object Contributor {
 
   def generate_url(guid: String, fullName: String): Option[String] = {
     val normalizedName = java.text.Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
-    Some(Array(BBB_LIVE_AUTHOR_BASE_URL, guid, normalizedName).mkString("/"))
+    val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
+    Some(Array(BBB_LIVE_AUTHOR_BASE_URL, guid, normalizedNameWithDefault).mkString("/"))
   }
 }
 case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
@@ -47,17 +48,17 @@ object BookMedia {
   val FULL_EPUB_MEDIA_ID = 1
   val SAMPLE_EPUB_MEDIA_ID = 2
 
-  def fullsize_jpg_url(mediaUrl: Option[String]): Option[String] = {
-    if (mediaUrl.isDefined) {
-      mediaUrl.get.takeRight(4) match {
-        case ".jpg" => mediaUrl
-        case _ => mediaUrl.map(_.replaceFirst("([^/])/([^/])", "$1/params;v=0/$2") + ".jpg")
-      }
-    } else {
-      None
+  def fullsize_jpg_url(mediaUrl: Option[String]):Option[String] = mediaUrl.map { url =>
+    import java.net.URL
+    try { new java.net.URL(url) } catch {
+      case ex: Exception =>
+        return None
+    }
+    url.takeRight(4) match {
+      case ".jpg" => url
+      case _ => url.replaceFirst("([^/])/([^/])", "$1/params;v=0/$2") + ".jpg"
     }
   }
-
 }
 
 // 
