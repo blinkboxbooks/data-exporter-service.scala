@@ -6,7 +6,8 @@ create table books (
     language_code CHAR(2),
     isbn varchar(128) not null,
     publication_date DATE not null,
-    title VARCHAR(255) not null
+    title VARCHAR(255) not null,
+    cover_url VARCHAR(255)
   );
 create table publishers (
     name VARCHAR(128) not null,
@@ -28,6 +29,9 @@ create table contributors (
     full_name VARCHAR(256) not null,
     last_name VARCHAR(256),
     first_name VARCHAR(256),
+    guid VARCHAR(256),
+    url VARCHAR(256),
+    image_url VARCHAR(256),
     id int not null
   );
 create table contributor_roles (

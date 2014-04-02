@@ -37,8 +37,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   val books = List(book("isbn1", "pub1"), book("isbn2", "pub2").copy(description = Some("descr 2")))
   val publishers = List(publisher(1, books(0).publisherId), publisher(2, books(1).publisherId))
   val contributors = List(
-    new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson"), "cf6134830c918d056a9d8292fdebd5293ea41901", Some("https://www.blinkboxbooks.com/#!/author/cf6134830c918d056a9d8292fdebd5293ea41901/bill-bryson"), Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg")),
-    new Contributor(22, "Leo Tolstoy", Some("Leo"), Some("Tolstoy"), "eee5db331fff59dc80d4d3698145f8304ef56ec8", Some("https://www.blinkboxbooks.com/#!/author/eee5db331fff59dc80d4d3698145f8304ef56ec8/leo-tolstoy"), Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg"))
+    new Contributor(11, "Bill Bryson", Some("Bill"), Some("Bryson"), "cf6134830c918d056a9d8292fdebd5293ea41901", Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg")),
+    new Contributor(22, "Leo Tolstoy", Some("Leo"), Some("Tolstoy"), "eee5db331fff59dc80d4d3698145f8304ef56ec8", Some("https://media.blinkboxbooks.com/c540/ebb5/2ad3/e8f6/ebfe/5fa9/2f76/f43f.jpg"))
   )
 
   val genres = List(new Genre(1, None, Some("FIC00000"), Some("Fiction")),
@@ -55,6 +55,14 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new CurrencyRate("GBP", "JPY", 132.4146))
 
   val bookMedia = List(bookMediaCover(0, books(0).id), bookMediaCover(1, books(1).id))
+
+  // We will output books and contributors enriched with data...
+  val contributorsWithUrls = List(addUrlToContributor(contributors(0), Some("https://www.blinkboxbooks.com/#!/author/cf6134830c918d056a9d8292fdebd5293ea41901/bill-bryson")),
+    addUrlToContributor(contributors(1), Some("https://www.blinkboxbooks.com/#!/author/eee5db331fff59dc80d4d3698145f8304ef56ec8/leo-tolstoy")))
+
+  val booksWithCovers = books.map({book =>
+    bookWithCover(book)
+  })
 
   before {
     initOutputDb()
@@ -77,16 +85,13 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   def checkSuccessfulExport() {
     using(reportingDbSession) {
-      assert(from(booksOutput)(select(_)).toSet === books.toSet)
+      assert(from(booksOutput)(select(_)).toSet === booksWithCovers.toSet)
       assert(from(publishersOutput)(select(_)).toSet === publishers.toSet)
-      assert(from(contributorsOutput)(select(_)).toSet === contributors.toSet)
+      assert(from(contributorsOutput)(select(_)).toSet === contributorsWithUrls.toSet)
       assert(from(contributorRolesOutput)(select(_)).toSet === bookContributors.toSet)
-
       assert(from(userClubcardsOutput)(select(_)).toSet === Set(
         new UserClubcardInfo("card1", 101), new UserClubcardInfo("card2", 102)))
-
       assert(from(currencyRatesOutput)(select(_)).toSet === currencyRates.toSet)
-
       assert(from(genresOutput)(select(_)).toSet === genres.toSet)
       assert(from(bookGenresOutput)(select(_)).toSet === bookGenres.toSet)
     }
@@ -165,8 +170,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Truncate book details") {
-    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"),
-      10, "http://media.bbb.com/blah.png")
+    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"), 10)
     val t = DataExporterService.truncate(b)
     assert(b.description.get.size > ReportingSchema.MAX_DESCRIPTION_LENGTH)
     assert(t.description.get.size == ReportingSchema.MAX_DESCRIPTION_LENGTH)
@@ -179,10 +183,22 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Save book with an enormous description") {
-    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"),
-      10, "http://media.bbb.com/foobar.png")
+    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"), 10)
 
+    using(shopDbSession) {
+      bookData.insert(book)
+    }
+    runDataExporter(2)
+    using(reportingDbSession) {
+      assert(from(booksOutput)(select(_)).toList.size == books.size + 1)
+    }
+  }
+
+  test("png Book cover URLs are converted to fullsize jpg URLs"){
+    val book = Book("1234567890123", "123", date(), "Book with a png cover url", Some("description"), Some("uk"),
+      10)
     val bookMedia = BookMedia(4, book.id, Some("http://media.bbb.com/foobar.png"), 0)
+
     using(shopDbSession) {
       bookData.insert(book)
       bookMediaData.insert(bookMedia)
@@ -190,6 +206,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     runDataExporter(2)
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toList.size == books.size + 1)
+      val theBook = from(booksOutput)(b => where(b.id === book.id) select(b)).head
+      assert(theBook.coverUrl.get == "http://media.bbb.com/params;v=0/foobar.png.jpg")
     }
   }
 
@@ -198,7 +216,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     // "This should never happen" - JP
 
     val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
-      10, "")
+      10)
     using(shopDbSession){
       bookData.insert(book)
     }
@@ -206,7 +224,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       val actual = from(booksOutput)(select(_)).toList
       assert(actual.size == books.size + 1)
-      assert(actual.contains(book))
+      assert(actual.contains(bookWithCover(book, None)))
     }
 
   }
@@ -214,7 +232,8 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   test("Save a book with a null cover url"){
     // this should also never happen - shop db schema says url field must not be null
     val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
-      10, "")
+      10)
+    val expected = bookWithCover(book, None)
     val badBookMedia = BookMedia(42, book.id, None, 0)
     using(shopDbSession){
       bookData.insert(book)
@@ -224,35 +243,44 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       val actual = from(booksOutput)(select(_)).toList
       assert(actual.size == books.size + 1)
-      assert(actual.contains(book))
+      assert(actual.contains(expected))
+      val theBook = from(booksOutput)(b => where(b.id === book.id) select(b)).head
+      assert(theBook.coverUrl == None)
     }
 
   }
 
   test("Save a contributor with various fields missing"){
-    val c1 = newContributor(42, "I.C. Weiner", "guid42", Some("https://www.blinkboxbooks.com/#!/author/guid42/ic-weiner"), Some("https://media.blinkboxbooks.com/params;v=0/guid42.jpg.jpg"))
-    val c2 = newContributor(43, "Suq Madiiq", "guid43", Some("https://www.blinkboxbooks.com/#!/author/guid43/suq-madiiq"))
+    val c1 = newContributor(42, "I.C. Weiner", "guid42", Some("https://media.blinkboxbooks.com/guid42.jpg"))
+    val c2 = newContributor(43, "Suq Madiiq", "guid43", None)
     using(shopDbSession){ contributorData.insert(Set(c1, c2)) }
     runDataExporter(2)
     using(reportingDbSession) {
-      org.squeryl.Session.currentSession.setLogger({str => logger.info(str)})
       val actual = from(contributorsOutput)(select(_)).toSet
       assert(actual.size == contributors.size + 2)
-      assert(actual.contains(c1))
-      assert(actual.contains(c2))
+      val ic =  from(contributorsOutput)(cont => where(cont.id === c1.id) select(cont)).head
+      assert(ic.url == Some("https://www.blinkboxbooks.com/#!/author/guid42/ic-weiner"))
+      assert(ic.imageUrl == Some("https://media.blinkboxbooks.com/guid42.jpg"))
+      assert(ic.guid == "guid42")
+      val suq = from(contributorsOutput)(cont => where(cont.id === c2.id) select(cont)).head
+      assert(suq.url == Some("https://www.blinkboxbooks.com/#!/author/guid43/suq-madiiq"))
+      assert(suq.imageUrl == None)
+      assert(suq.guid == "guid43")
     }
   }
 
   test("Contributor url is constructed from the contributor's guid and full name"){
     val inShopDb = newContributor(43, "T.S. McTést Face", "guid43")
-    using(shopDbSession){ contributorData.insert(inShopDb)}
+    val contWithEmptyFullName = newContributor(44, "", "guid44", None)
+    using(shopDbSession){ contributorData.insert(Set(inShopDb, contWithEmptyFullName))}
     runDataExporter()
     using(reportingDbSession) {
       val actual = from(contributorsOutput)(cont => where(cont.id === inShopDb.id) select(cont)).head
       val cleanedName = "ts-mctest-face"
       val expected_url = Some("https://www.blinkboxbooks.com/#!/author/" + inShopDb.guid + "/" + cleanedName)
-      logger.info("actual: " + actual.url + " expected: " + expected_url)
       assert(actual.url == expected_url)
+      val badDataContributor = from(contributorsOutput)(cont => where(cont.id === contWithEmptyFullName.id) select(cont)).head
+      assert(badDataContributor.url == Some("https://www.blinkboxbooks.com/#!/author/guid44/details"))
     }
   }
 
@@ -286,29 +314,33 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     using(reportingDbSession) {
       // Insert some existing data into each output table, 
       // so we can check that these get cleared on export.
-      booksOutput.insert(new Book())
+      booksOutput.insert(new BookWithCover())
       publishersOutput.insert(new Publisher())
       userClubcardsOutput.insert(new UserClubcardInfo())
       currencyRatesOutput.insert(new CurrencyRate())
-      contributorsOutput.insert(new Contributor())
+      contributorsOutput.insert(new ContributorWithUrls())
       contributorRolesOutput.insert(new MapBookToContributor())
       genresOutput.insert(new Genre())
       bookGenresOutput.insert(new MapBookToGenre())
     }
   }
 
-  private def newContributor(id: Int, fullname: String, guid: String, url: Option[String] =  None, imageUrl: Option[String] = None) = {
-    Contributor(id, fullname, None, None, guid, url, imageUrl)
+  private def newContributor(id: Int, fullname: String, guid: String, imageUrl: Option[String] = None) = {
+    Contributor(id, fullname, None, None, guid, imageUrl)
   }
 
   private def publisher(id: Int, name: String, ebookDiscount: Float = 0.2f,
     implementsAgencyPricingModel: Boolean = false, countryCode: Option[String] = None) =
     new Publisher(id, name, ebookDiscount, implementsAgencyPricingModel, countryCode)
 
-  private def book(id: String, publisherId: String, coverUrl: String = "http://media.bbb.com/test.png", publicationDate: Date = date(),
+  private def book(id: String, publisherId: String, publicationDate: Date = date(),
     title: String = "title", description: Option[String] = None, languageCode: Option[String] = None,
     numberOfSections: Int = 42) =
-    new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections, coverUrl)
+    new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections)
+
+  private def bookWithCover(sourceBook: Book, coverUrl: Option[String] = Some("http://media.bbb.com/params;v=0/test.png.jpg")) =
+    new BookWithCover(sourceBook.id, sourceBook.publisherId, sourceBook.publicationDate, sourceBook.title,
+      sourceBook.description, sourceBook.languageCode, sourceBook.numberOfSections, coverUrl)
 
   private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String) {
     clubcards.insert(new Clubcard(cardId, cardNumber))
@@ -358,6 +390,10 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   private def bookMediaCover(id: Int, isbn: String) = {
     //dat_book_media type 0 = cover, 1 = full epub, 2 = sample epub
     new BookMedia(id, isbn, Some("http://media.bbb.com/test.png"), 0)
+  }
+
+  def addUrlToContributor(c: Contributor, url: Option[String]): ContributorWithUrls = {
+    ContributorWithUrls(c.id, c.fullName, c.firstName, c.lastName, c.guid, c.imageUrl, url)
   }
 
 }

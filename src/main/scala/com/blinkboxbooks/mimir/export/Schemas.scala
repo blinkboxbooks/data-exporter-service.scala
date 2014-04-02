@@ -8,8 +8,8 @@ import org.squeryl.PrimitiveTypeMode._
 // Objects for schemas.
 //
 case class Book(id: String, publisherId: String, publicationDate: Date,
-  title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int, coverUrl: String) {
-  def this() = this("", "", new Date(0), "", None, None, 0, "")
+  title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
+  def this() = this("", "", new Date(0), "", None, None, 0)
 }
 case class Publisher(id: Int, name: String, ebookDiscount: Float,
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
@@ -24,17 +24,8 @@ case class MapBookToGenre(isbn: String, genreId: Int) {
 case class CurrencyRate(fromCurrency: String, toCurrency: String, rate: BigDecimal) {
   def this() = this("", "", 0)
 }
-case class Contributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, url: Option[String], imageUrl: Option[String]) {
-  def this() = this(0, "", None, None, "", None, None)
-}
-object Contributor {
-  val BBB_LIVE_AUTHOR_BASE_URL = "https://www.blinkboxbooks.com/#!/author"
-
-  def generate_url(guid: String, fullName: String): Option[String] = {
-    val normalizedName = java.text.Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
-    val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
-    Some(Array(BBB_LIVE_AUTHOR_BASE_URL, guid, normalizedNameWithDefault).mkString("/"))
-  }
+case class Contributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, imageUrl: Option[String]) {
+  def this() = this(0, "", None, None, "", None)
 }
 case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
   def this() = this(0, "", 0)
@@ -42,6 +33,19 @@ case class MapBookToContributor(contributorId: Int, isbn: String, role: Int) {
 case class BookMedia(id: Int, isbn: String, url: Option[String], kind: Int){
   def this() = this(0, "", Some(""), 0)
 }
+
+// Enriched Output Classes
+// They contain additional fields that are not in the source data.
+
+case class BookWithCover(id: String, publisherId: String, publicationDate: Date, title: String, description: Option[String],
+                         languageCode: Option[String], numberOfSections: Int, coverUrl: Option[String]) {
+  def this() = this("", "", new Date(0), "", None, None, 0, None)
+}
+case class ContributorWithUrls(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, imageUrl: Option[String], url: Option[String]) {
+  def this() = this(0, "", None, None, "", None, None)
+}
+
+
 // Database enum values
 object BookMedia {
   val BOOK_COVER_MEDIA_ID = 0
@@ -49,7 +53,6 @@ object BookMedia {
   val SAMPLE_EPUB_MEDIA_ID = 2
 
   def fullsize_jpg_url(mediaUrl: Option[String]):Option[String] = mediaUrl.map { url =>
-    import java.net.URL
     try { new java.net.URL(url) } catch {
       case ex: Exception =>
         return None
@@ -58,6 +61,18 @@ object BookMedia {
       case ".jpg" => url
       case _ => url.replaceFirst("([^/])/([^/])", "$1/params;v=0/$2") + ".jpg"
     }
+  }
+}
+
+object Contributor {
+  import com.typesafe.config.ConfigFactory
+  val config = ConfigFactory.load("data-exporter-service")
+  val AUTHOR_BASE_URL = config.getString("author.base.url")
+
+  def generate_url(guid: String, fullName: String): Option[String] = {
+    val normalizedName = java.text.Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
+    val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
+    Some(Array(AUTHOR_BASE_URL, guid, normalizedNameWithDefault).mkString("/"))
   }
 }
 
@@ -93,8 +108,8 @@ object ShopSchema extends Schema {
     c.fullName is (named("full_name")),
     c.firstName is (named("first_name")),
     c.imageUrl is (named("photo")),
-    c.firstName is (named("first_name")))
-    )
+    c.firstName is (named("first_name")),
+    c.lastName is (named("last_name"))))
 
   val mapBookContributorData = table[MapBookToContributor]("map_book_contributor")
   on(mapBookContributorData)(m => declare(
@@ -163,7 +178,7 @@ object ReportingSchema extends Schema {
 
   val MAX_DESCRIPTION_LENGTH = 30000
 
-  val booksOutput = table[Book]("books")
+  val booksOutput = table[BookWithCover]("books")
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
@@ -191,11 +206,14 @@ object ReportingSchema extends Schema {
     e.fromCurrency is (named("from_currency"), dbType("VARCHAR(5)")),
     e.toCurrency is (named("to_currency"), dbType("VARCHAR(5)"))))
 
-  val contributorsOutput = table[Contributor]("contributors")
+  val contributorsOutput = table[ContributorWithUrls]("contributors")
   on(contributorsOutput)(c => declare(
     c.fullName is (named("full_name"), dbType("VARCHAR(256)")),
     c.firstName is (named("first_name"), dbType("VARCHAR(256)")),
-    c.lastName is (named("last_name"), dbType("VARCHAR(256)"))))
+    c.lastName is (named("last_name"), dbType("VARCHAR(256)")),
+    c.guid is (named("guid"), dbType("VARCHAR(256)")),
+    c.url is (named("url"), dbType("VARCHAR(256)")),
+    c.imageUrl is (named("image_url"), dbType("VARCHAR(256)"))))
 
   val contributorRolesOutput = table[MapBookToContributor]("contributor_roles")
   on(contributorRolesOutput)(m => declare(

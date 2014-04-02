@@ -98,8 +98,8 @@ object DataExporterService extends App with Logging {
                on(book.id === media.map(_.isbn).get)
              )
           val converter = (b: (Book, BookMedia)) =>
-            new Book(b._1.id, b._1.publisherId, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
-              b._1.languageCode, b._1.numberOfSections, b._2.url.getOrElse(""))
+            new BookWithCover(b._1.id, b._1.publisherId, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
+              b._1.languageCode, b._1.numberOfSections, BookMedia.fullsize_jpg_url(b._2.url))
           copy(bookResults, booksOutput, converter)
         }
       })
@@ -107,7 +107,7 @@ object DataExporterService extends App with Logging {
       withReadOnlySession(shopDatasource)(shopSession => {
         using(shopSession){
           val converter = (c: (Contributor)) =>
-            new Contributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, Contributor.generate_url(c.guid, c.fullName), BookMedia.fullsize_jpg_url(c.imageUrl))
+            new ContributorWithUrls(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsize_jpg_url(c.imageUrl), Contributor.generate_url(c.guid, c.fullName))
           copy(from(contributorData)(select(_)), contributorsOutput, converter)
         }
       })
