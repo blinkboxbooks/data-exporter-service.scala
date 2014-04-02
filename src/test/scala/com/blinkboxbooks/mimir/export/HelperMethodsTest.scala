@@ -23,14 +23,16 @@ class BookMediaTest extends FunSuite {
 
 @RunWith(classOf[JUnitRunner])
 class ContributorTest extends FunSuite {
+  val baseUrl = "https://www.blinkboxbooks.com/#!/author"
+
   test("Generates author URLs") {
-    val actualUrl = Contributor.generateContributorUrl("guid","F. Honda Dïcks")
+    val actualUrl = Contributor.generateContributorUrl(baseUrl,"guid","F. Honda Dïcks")
     val expectedUrl = Some("https://www.blinkboxbooks.com/#!/author/guid/f-honda-dicks")
     assert(actualUrl === expectedUrl)
   }
 
   test("Deals with empty name") {
-    val actualUrl = Contributor.generateContributorUrl("guid","")
+    val actualUrl = Contributor.generateContributorUrl(baseUrl, "guid","")
     val expectedUrl = Some("https://www.blinkboxbooks.com/#!/author/guid/details")
     assert(actualUrl === expectedUrl)
   }

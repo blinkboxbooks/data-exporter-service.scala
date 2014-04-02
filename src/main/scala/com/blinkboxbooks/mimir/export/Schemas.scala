@@ -66,16 +66,12 @@ object BookMedia {
 }
 
 object Contributor {
-  import com.typesafe.config.ConfigFactory
   import java.text.Normalizer
 
-  val config = ConfigFactory.load("data-exporter-service")
-  val AUTHOR_BASE_URL = config.getString("author.base.url")
-
-  def generateContributorUrl(guid: String, fullName: String): Option[String] = {
+  def generateContributorUrl(baseUrl: String, guid: String, fullName: String): Option[String] = {
     val normalizedName = Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
     val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
-    Some(Array(AUTHOR_BASE_URL, guid, normalizedNameWithDefault).mkString("/"))
+    Some(Array(baseUrl, guid, normalizedNameWithDefault).mkString("/"))
   }
 }
 
