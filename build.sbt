@@ -30,8 +30,6 @@ testOptions += Tests.Argument(TestFrameworks.JUnit, "-v")
 
 resolvers += "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository"
 
-resolvers += "SpringSource Enterprise Bundle Repository" at "http://nexus.mobcast.co.uk/nexus/content/repositories/sebr-external-bundle-releases"
-
 parallelExecution := false
 
 net.virtualvoid.sbt.graph.Plugin.graphSettings
@@ -45,13 +43,3 @@ publishArtifact in (Compile, packageDoc) := false
 
 publishArtifact in (Compile, packageSrc) := false
 
-// Pick up login credentials for Nexus from user's directory.
-credentials += Credentials(Path.userHome / ".sbt" / ".nexus")
-
-publishTo := {
-  val nexus = "http://jenkins:m0bJenk@nexus.mobcast.co.uk/"
-  if (version.value.trim.endsWith("SNAPSHOT"))
-    Some("Sonatype Nexus Repository Manager" at nexus + "nexus/content/repositories/snapshots/")
-  else
-    Some("Sonatype Nexus Repository Manager"  at nexus + "nexus/content/repositories/releases")
-}
