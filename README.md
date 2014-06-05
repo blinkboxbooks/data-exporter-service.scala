@@ -82,3 +82,4 @@ $ java -jar data-export-service-assembly-1.0.jar
 
 Note that the current directory "." is included on the classpath of the built jar file, so
 you can run the service by putting the properties file here.
+
