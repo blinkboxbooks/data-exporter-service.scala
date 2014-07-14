@@ -71,7 +71,7 @@ $ mysql -u <username> -p <password> reporting < db/schema.sql
 ## Running the service
 
 To run the service, you need to provide it with configuration, typically as a properties file.
-An example file is in src/main/resources/data-exporting-service.properties.example.
+An example file is in [src/main/resources/data-exporter-service.properties.example](https://git.mobcastdev.com/Mimir/data-exporter-service/blob/master/src/main/resources/data-exporter-service.properties.example).
 Edit this as necessary, then put it in the directory you'll be running the service from.  
 
 To start the service, use a command like:
