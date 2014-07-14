@@ -174,7 +174,7 @@ case class UserClubcardInfo(cardId: String, userId: Int) {
 
 object ReportingSchema extends Schema {
 
-  val MAX_DESCRIPTION_LENGTH = 30000
+  val MAX_DESCRIPTION_LENGTH = 20000
 
   val booksOutput = table[OutputBook]("books")
   on(booksOutput)(b => declare(

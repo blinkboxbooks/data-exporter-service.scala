@@ -1,7 +1,7 @@
 -- table declarations :
 create table books (
     publisher_id varchar(128) not null,
-    description VARCHAR(30000),
+    description VARCHAR(20000),
     number_of_sections int not null,
     language_code CHAR(2),
     isbn varchar(128) not null,
