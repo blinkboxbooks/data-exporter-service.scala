@@ -1,7 +1,7 @@
 -- table declarations :
 create table books (
     publisher_id varchar(128) not null,
-    description VARCHAR(30000),
+    description VARCHAR(20000),
     number_of_sections int not null,
     language_code CHAR(2),
     isbn varchar(128) not null,
@@ -49,3 +49,12 @@ create table book_genres (
     isbn VARCHAR(13) not null,
     genre_id int not null
   );
+
+CREATE INDEX `index_genres_on_id` ON genres (`id`);
+CREATE INDEX `index_genres_on_parent_id` ON genres (`parent_id`);
+CREATE INDEX `index_book_genres_on_isbn` ON book_genres (`isbn`);
+CREATE INDEX `index_book_genres_on_genre_id` ON book_genres (`genre_id`);
+CREATE INDEX `index_publishers_on_id` ON publishers (`id`);
+CREATE INDEX `index_contributors_on_id` ON contributors (`id`);
+CREATE INDEX `index_contributor_roles_on_isbn` ON contributor_roles (`isbn`);
+CREATE INDEX `index_contributor_roles_on_contributor_id` ON contributor_roles (`contributor_id`);
