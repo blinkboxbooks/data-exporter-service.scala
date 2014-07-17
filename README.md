@@ -1,5 +1,6 @@
-data-exporter-service
-=====================
+# data-exporter-service [![Build Status](http://grisham:8111/app/rest/builds/buildType:%28id:Books_Platform_Mimir_DataExporterService_BuildTestPublish%29/statusIcon)](http://grisham:8111/viewType.html?buildTypeId=Books_Platform_Mimir_DataExporterService_BuildTestPublish&guest=1)
+
+[ [Release Notes](http://jira.blinkbox.local/confluence/display/REL/Data+Exporter+Service+-+Release+Note) ]
 
 Service that exports snapshots of shop data, for reporting purposes.
 
