@@ -26,7 +26,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   import ClubcardSchema._
   import ReportingSchema._
 
-  implicit val timeout = 10 seconds
+  implicit val timeout = 10.seconds
   implicit val defaultBatchSize = 100
 
   var shopDbSession: Session = _

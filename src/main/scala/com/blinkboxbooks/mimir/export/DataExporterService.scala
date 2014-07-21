@@ -1,7 +1,12 @@
 package com.blinkboxbooks.mimir.export
 
-import com.typesafe.config.ConfigFactory
+import com.blinkbox.books.logging.Loggers
+import com.blinkbox.books.config.Configuration
 import com.typesafe.scalalogging.slf4j.Logging
+import it.sauronsoftware.cron4j.Scheduler
+import java.sql.Date
+import java.util.concurrent.TimeUnit
+import javax.sql.DataSource
 import org.apache.commons.dbcp.BasicDataSource
 import org.squeryl.{ SessionFactory, Session, Schema, Query, Table }
 import org.squeryl.adapters.MySQLAdapter
@@ -9,34 +14,31 @@ import org.squeryl.PrimitiveTypeMode._
 import rx.lang.scala.Observable
 import scala.concurrent.{ Await, promise }
 import scala.concurrent.duration._
-import java.sql.Date
-import javax.sql.DataSource
-import java.util.concurrent.TimeUnit
-import it.sauronsoftware.cron4j.Scheduler
 
-object DataExporterService extends App with Logging {
+object DataExporterService extends App with Configuration with Logging with Loggers {
 
   import ShopSchema._
   import ClubcardSchema._
   import ReportingSchema._
   import DbUtils._
 
-  val config = ConfigFactory.load("data-exporter-service")
-  val batchSize = config.getInt("exporter.jdbc.batchsize")
-  val timeout = Duration.create(config.getInt("exporter.jdbc.timeout.s"), TimeUnit.SECONDS)
-  val authorBaseUrl = config.getString("author.base.url")
+  val serviceConfig = config.getConfig("service.dataExporter")
+  
+  val batchSize = serviceConfig.getInt("jdbcBatchsize")
+  val timeout = serviceConfig.getDuration("jdbcTimeout", TimeUnit.MILLISECONDS).millis
+  val authorBaseUrl = serviceConfig.getString("authorBaseUrl")
 
   // Configure datasources for reading and writing.
-  val shopDatasource = createDatasource("shop", config)
-  val clubcardDatasource = createDatasource("clubcard", config)
-  val outputDatasource = createDatasource("reporting", config)
+  val shopDatasource = createDatasource(serviceConfig.getConfig("shopDb"))
+  val clubcardDatasource = createDatasource(serviceConfig.getConfig("clubcardDb"))
+  val outputDatasource = createDatasource(serviceConfig.getConfig("reportingDb"))
 
   if (args.contains("--now")) {
     logger.info("Starting one-off export")
     runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
     logger.info("Completed export")
   } else {
-    val cronStr = config.getString("exporter.schedule")
+    val cronStr = serviceConfig.getString("schedule")
     logger.info(s"Scheduling data export with configuration: $cronStr")
     val scheduler = new Scheduler()
     scheduler.schedule(cronStr, new Runnable() {
@@ -94,7 +96,7 @@ object DataExporterService extends App with Logging {
         using(shopSession){
           val bookResults =
              join(bookData, bookMediaData.leftOuter)((book, media) =>
-               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or(media.map(_.kind) isNull))
+               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or(media.map(_.kind).isNull))
                select(book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
                on(book.id === media.map(_.isbn).get)
              )

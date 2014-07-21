@@ -12,12 +12,12 @@ object DbUtils {
   /**
    * Create a datasource for the given MySQL DB.
    */
-  def createDatasource(prefix: String, config: Config) = {
+  def createDatasource(config: Config) = {
     val datasource = new BasicDataSource
-    datasource.setUrl(config.getString(s"$prefix.jdbc.url"))
-    datasource.setUsername(config.getString(s"$prefix.jdbc.username"))
-    datasource.setPassword(config.getString(s"$prefix.jdbc.password"))
-    datasource.setDriverClassName(config.getString(s"$prefix.jdbc.driver"))
+    datasource.setUrl(config.getString("url"))
+    datasource.setUsername(config.getString("username"))
+    datasource.setPassword(config.getString("password"))
+    datasource.setDriverClassName(config.getString("driver"))
     datasource.setValidationQuery("SELECT 1")
     // Check it works OK before handing it out.
     datasource.getConnection.close
