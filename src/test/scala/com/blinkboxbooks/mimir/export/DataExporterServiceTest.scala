@@ -376,6 +376,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     session
   }
 
+  Class.forName("org.h2.Driver")
   private def url(dbName: String) = s"jdbc:h2:mem:${dbName};MODE=MYSQL"
 
   private def date() = {
