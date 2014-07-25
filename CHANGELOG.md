@@ -1,5 +1,14 @@
 # Data Exporter Service Change Log
 
+## 2.0.3 ([#20](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/20) 2014-07-25 11:08:45)
+
+Don't require DB on startup
+
+### Improvements:
+
+- Don't exit on startup if DB is not immediately available.
+
+
 ## 2.0.2 ([#19](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/19) 2014-07-24 12:40:10)
 
 Simplified config
