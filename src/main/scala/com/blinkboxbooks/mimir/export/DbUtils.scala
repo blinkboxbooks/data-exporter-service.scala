@@ -19,8 +19,6 @@ object DbUtils {
     datasource.setPassword(config.getString("password"))
     datasource.setDriverClassName(config.getString("driver"))
     datasource.setValidationQuery("SELECT 1")
-    // Check it works OK before handing it out.
-    datasource.getConnection.close
     datasource
   }
 
