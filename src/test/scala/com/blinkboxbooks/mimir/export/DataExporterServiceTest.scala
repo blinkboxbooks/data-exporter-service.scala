@@ -270,7 +270,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Contributor url is constructed from the contributor's guid and full name"){
-    val inShopDb = newContributor(43, "T.S. McTest Face", "guid43")
+    val inShopDb = newContributor(43, "T.S. McTést Face", "guid43")
     val contWithEmptyFullName = newContributor(44, "", "guid44", None)
     using(shopDbSession){ contributorData.insert(Set(inShopDb, contWithEmptyFullName))}
     runDataExporter()
