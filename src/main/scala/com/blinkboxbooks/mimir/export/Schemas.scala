@@ -7,13 +7,13 @@ import org.squeryl.PrimitiveTypeMode._
 // 
 // Objects for schemas.
 //
-case class Book(id: String, publisherId: String, publicationDate: Date,
+case class Book(id: String, publisherId: String, discount: Float, publicationDate: Date,
   title: String, description: Option[String], languageCode: Option[String], numberOfSections: Int) {
-  def this() = this("", "", new Date(0), "", None, None, 0)
+  def this() = this("", "", 0, new Date(0), "", None, None, 0)
 }
-case class Publisher(id: Int, name: String, ebookDiscount: Float,
+case class Publisher(id: Int, name: String, 
   implementsAgencyPricingModel: Boolean, countryCode: Option[String]) {
-  def this() = this(0, "", 0, false, None)
+  def this() = this(0, "", false, None)
 }
 case class Genre(id: Int, parentId: Option[Int], bisacCode: Option[String], name: Option[String]) {
   def this() = this(0, None, None, None)
@@ -37,9 +37,9 @@ case class BookMedia(id: Int, isbn: String, url: Option[String], kind: Int){
 // Enriched Output Classes
 // They contain additional fields that are not in the source data.
 
-case class OutputBook(id: String, publisherId: String, publicationDate: Date, title: String, description: Option[String],
+case class OutputBook(id: String, publisherId: String, discount: Float, publicationDate: Date, title: String, description: Option[String],
                          languageCode: Option[String], numberOfSections: Int, coverUrl: Option[String]) {
-  def this() = this("", "", new Date(0), "", None, None, 0, None)
+  def this() = this("", "", 0, new Date(0), "", None, None, 0, None)
 }
 case class OutputContributor(id: Int, fullName: String, firstName: Option[String], lastName: Option[String], guid: String, imageUrl: Option[String], url: Option[String]) {
   def this() = this(0, "", None, None, "", None, None)
@@ -88,6 +88,7 @@ object ShopSchema extends Schema {
   on(bookData)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
+    b.discount is (named("discount")),
     b.publicationDate is (named("publication_date")),
     // Shop DB has longer size of this field than the reporting DB, hence replicate this in tests.
     b.description is dbType(s"varchar(65535)"),
@@ -96,9 +97,7 @@ object ShopSchema extends Schema {
 
   val publisherData = table[Publisher]("dat_publisher")
   on(publisherData)(p => declare(
-    p.ebookDiscount is (named("ebook_discount")),
     p.implementsAgencyPricingModel is (named("implements_agency_pricing_model")),
-    p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"))))
 
   val contributorData = table[Contributor]("dat_contributor")
@@ -180,6 +179,7 @@ object ReportingSchema extends Schema {
   on(booksOutput)(b => declare(
     b.id is (named("isbn")),
     b.publisherId is (named("publisher_id")),
+    b.discount is (named("discount")),
     b.publicationDate is (named("publication_date"), dbType("DATE")),
     b.title is dbType("VARCHAR(255)"),
     b.description is dbType(s"varchar($MAX_DESCRIPTION_LENGTH)"),
@@ -191,7 +191,6 @@ object ReportingSchema extends Schema {
   on(publishersOutput)(p => declare(
     p.implementsAgencyPricingModel is (named("implements_agency_pricing_model")),
     p.name is (dbType("VARCHAR(128)")),
-    p.ebookDiscount is (named("ebook_discount")),
     p.countryCode is (named("country_code"), dbType("VARCHAR(4)"))))
 
   val userClubcardsOutput = table[UserClubcardInfo]("user_clubcards")
