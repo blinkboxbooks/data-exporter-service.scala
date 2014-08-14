@@ -1,6 +1,7 @@
 -- table declarations :
 create table books (
     publisher_id varchar(128) not null,
+    discount int not null,
     description VARCHAR(20000),
     number_of_sections int not null,
     language_code CHAR(2),
@@ -11,7 +12,6 @@ create table books (
   );
 create table publishers (
     name VARCHAR(128) not null,
-    ebook_discount int not null,
     implements_agency_pricing_model boolean not null,
     id int not null,
     country_code VARCHAR(4)

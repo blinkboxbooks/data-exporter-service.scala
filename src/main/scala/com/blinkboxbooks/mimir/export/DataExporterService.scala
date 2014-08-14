@@ -101,7 +101,7 @@ object DataExporterService extends App with Configuration with Logging with Logg
                on(book.id === media.map(_.isbn).get)
              )
           val converter = (b: (Book, BookMedia)) =>
-            new OutputBook(b._1.id, b._1.publisherId, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
+            new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
           copy(bookResults, booksOutput, converter)
         }

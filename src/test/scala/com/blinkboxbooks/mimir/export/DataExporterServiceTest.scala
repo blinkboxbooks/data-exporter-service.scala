@@ -170,7 +170,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Truncate book details") {
-    val b = Book("1234567890123", "123", date(), "Book with big description", Some("12345678990" * 10000), Some("uk"), 10)
+    val b = Book("1234567890123", "123", 0, date(), "Book with big description", Some("12345678990" * 10000), Some("uk"), 10)
     val t = DataExporterService.truncate(b)
     assert(b.description.get.size > ReportingSchema.MAX_DESCRIPTION_LENGTH)
     assert(t.description.get.size == ReportingSchema.MAX_DESCRIPTION_LENGTH)
@@ -183,7 +183,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("Save book with an enormous description") {
-    val book = Book("1234567890123", "123", date(), "Book with big description", Some("X" * 65534), Some("uk"), 10)
+    val book = Book("1234567890123", "123", 0, date(), "Book with big description", Some("X" * 65534), Some("uk"), 10)
 
     using(shopDbSession) {
       bookData.insert(book)
@@ -195,7 +195,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   test("png Book cover URLs are converted to fullsize jpg URLs"){
-    val book = Book("1234567890123", "123", date(), "Book with a png cover url", Some("description"), Some("uk"),
+    val book = Book("1234567890123", "123", 0, date(), "Book with a png cover url", Some("description"), Some("uk"),
       10)
     val bookMedia = BookMedia(4, book.id, Some("http://media.bbb.com/foobar.png"), 0)
 
@@ -215,7 +215,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     // save and export a book without the cover_url row in dat_book_media
     // "This should never happen" - JP
 
-    val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
+    val book = Book("1234567890123", "123", 0.2f, date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
       10)
     using(shopDbSession){
       bookData.insert(book)
@@ -231,7 +231,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   test("Save a book with a null cover url"){
     // this should also never happen - shop db schema says url field must not be null
-    val book = Book("1234567890123", "123", date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
+    val book = Book("1234567890123", "123", 0.2f, date(), "Book with big description", Some("Book with no cover url record"), Some("uk"),
       10)
     val expected = bookWithCover(book, None)
     val badBookMedia = BookMedia(42, book.id, None, 0)
@@ -329,17 +329,17 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     Contributor(id, fullname, None, None, guid, imageUrl)
   }
 
-  private def publisher(id: Int, name: String, ebookDiscount: Float = 0.2f,
+  private def publisher(id: Int, name: String, 
     implementsAgencyPricingModel: Boolean = false, countryCode: Option[String] = None) =
-    new Publisher(id, name, ebookDiscount, implementsAgencyPricingModel, countryCode)
+    new Publisher(id, name, implementsAgencyPricingModel, countryCode)
 
-  private def book(id: String, publisherId: String, publicationDate: Date = date(),
+  private def book(id: String, publisherId: String, discount: Float = 0.2f, publicationDate: Date = date(),
     title: String = "title", description: Option[String] = None, languageCode: Option[String] = None,
     numberOfSections: Int = 42) =
-    new Book(id, publisherId, publicationDate, title, description, languageCode, numberOfSections)
+    new Book(id, publisherId, discount, publicationDate, title, description, languageCode, numberOfSections)
 
   private def bookWithCover(sourceBook: Book, coverUrl: Option[String] = Some("http://media.bbb.com/params;v=0/test.png.jpg")) =
-    new OutputBook(sourceBook.id, sourceBook.publisherId, sourceBook.publicationDate, sourceBook.title,
+    new OutputBook(sourceBook.id, sourceBook.publisherId, 0.2f, sourceBook.publicationDate, sourceBook.title,
       sourceBook.description, sourceBook.languageCode, sourceBook.numberOfSections, coverUrl)
 
   private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String) {
