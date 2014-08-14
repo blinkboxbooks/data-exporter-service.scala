@@ -1,5 +1,13 @@
 # Data Exporter Service Change Log
 
+## 3.0.0 ([#21](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/21) 2014-08-07 13:25:12)
+
+Moved discount from publisher to book and amended tests accordingly
+
+### Breaking Change
+
+* Discount is now dynamic (per-book) rather than per-publisher.
+
 ## 2.0.3 ([#20](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/20) 2014-07-25 11:08:45)
 
 Don't require DB on startup
