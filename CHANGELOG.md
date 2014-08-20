@@ -1,5 +1,11 @@
 # Data Exporter Service Change Log
 
+## 3.0.1 ([#22](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/22) 2014-08-20 07:57:34)
+
+Fixed incorrect column data-type
+
+PATCH
+
 ## 3.0.0 ([#21](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/21) 2014-08-07 13:25:12)
 
 Moved discount from publisher to book and amended tests accordingly
