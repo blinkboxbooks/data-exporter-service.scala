@@ -2,7 +2,7 @@ package com.blinkboxbooks.mimir.export
 
 import com.blinkbox.books.logging.Loggers
 import com.blinkbox.books.config.Configuration
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import it.sauronsoftware.cron4j.Scheduler
 import java.sql.Date
 import java.util.concurrent.TimeUnit
@@ -15,7 +15,7 @@ import rx.lang.scala.Observable
 import scala.concurrent.{ Await, promise }
 import scala.concurrent.duration._
 
-object DataExporterService extends App with Configuration with Logging with Loggers {
+object DataExporterService extends App with Configuration with StrictLogging with Loggers {
 
   import ShopSchema._
   import ClubcardSchema._

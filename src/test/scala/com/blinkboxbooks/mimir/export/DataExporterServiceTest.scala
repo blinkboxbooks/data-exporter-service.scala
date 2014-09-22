@@ -14,13 +14,12 @@ import org.squeryl.PrimitiveTypeMode._
 import org.apache.commons.dbcp.BasicDataSource
 import org.mockito.Mockito._
 import org.mockito.Matchers._
-import com.typesafe.scalalogging.slf4j.Logging
 
 /**
  * Functional tests for export functionality.
  */
 @RunWith(classOf[JUnitRunner])
-class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter with MockitoSugar with Logging {
+class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter with MockitoSugar {
 
   import ShopSchema._
   import ClubcardSchema._
