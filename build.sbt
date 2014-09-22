@@ -9,7 +9,7 @@ organization := "com.blinkbox.books.mimir"
 scalaVersion := "2.10.4"
 
 libraryDependencies ++= Seq(
-  "com.blinkbox.books"      %% "common-config"        % "0.7.0",
+  "com.blinkbox.books"      %% "common-config"        % "1.2.1",
   "com.typesafe"            %% "scalalogging-slf4j"   % "1.1.0",
   "org.scalatest"           %% "scalatest"            % "2.2.0" % "test",
   "junit"                    % "junit"                % "4.11" % "test",
