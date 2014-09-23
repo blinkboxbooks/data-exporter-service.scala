@@ -1,5 +1,14 @@
 # Data Exporter Service Change Log
 
+## 3.0.2 ([#23](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/23) 2014-09-22 15:15:05)
+
+CP-1795 Fixed leaking DB connections
+
+### Bug fix:
+
+- Stop leaking DB connections, which caused the connection pool to run out of connections after a number of jobs, causing the service to stop running further jobs.
+
+
 ## 3.0.1 ([#22](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/22) 2014-08-20 07:57:34)
 
 Fixed incorrect column data-type
