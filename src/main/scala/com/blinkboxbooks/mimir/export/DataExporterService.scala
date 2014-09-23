@@ -2,7 +2,7 @@ package com.blinkboxbooks.mimir.export
 
 import com.blinkbox.books.logging.Loggers
 import com.blinkbox.books.config.Configuration
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import it.sauronsoftware.cron4j.Scheduler
 import java.sql.Date
 import java.util.concurrent.TimeUnit
@@ -15,7 +15,7 @@ import rx.lang.scala.Observable
 import scala.concurrent.{ Await, promise }
 import scala.concurrent.duration._
 
-object DataExporterService extends App with Configuration with Logging with Loggers {
+object DataExporterService extends App with Configuration with StrictLogging with Loggers {
 
   import ShopSchema._
   import ClubcardSchema._
@@ -23,7 +23,7 @@ object DataExporterService extends App with Configuration with Logging with Logg
   import DbUtils._
 
   val serviceConfig = config.getConfig("service.dataExporter")
-  
+
   val batchSize = serviceConfig.getInt("jdbcBatchsize")
   val timeout = serviceConfig.getDuration("jdbcTimeout", TimeUnit.MILLISECONDS).millis
   val authorBaseUrl = serviceConfig.getString("authorBaseUrl")
@@ -65,11 +65,6 @@ object DataExporterService extends App with Configuration with Logging with Logg
     implicit val t = timeout
     implicit val b = batchSize
 
-    // The default session factory refers to the shop database.
-    SessionFactory.concreteFactory =
-      Some(() => Session.create(shopDatasource.getConnection(), new MySQLAdapter))
-    SessionFactory.newSession.bindToCurrentThread
-
     withSession(outputDatasource)(implicit outputSession => {
 
       // Clear old snapshots.
@@ -85,33 +80,28 @@ object DataExporterService extends App with Configuration with Logging with Logg
       }
 
       // Write new snapshots. Copy these sequentially, in the same transaction. 
-
-      copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
-      copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
-      copy(from(genreData)(select(_)), genresOutput, identity[Genre])
-      copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
-      copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
-
       withReadOnlySession(shopDatasource)(shopSession => {
-        using(shopSession){
+        using(shopSession) {
+
+          copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
+          copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
+          copy(from(genreData)(select(_)), genresOutput, identity[Genre])
+          copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
+          copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+
           val bookResults =
-             join(bookData, bookMediaData.leftOuter)((book, media) =>
-               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or(media.map(_.kind).isNull))
-               select(book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
-               on(book.id === media.map(_.isbn).get)
-             )
-          val converter = (b: (Book, BookMedia)) =>
-            new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({_.take(ReportingSchema.MAX_DESCRIPTION_LENGTH)}),
+            join(bookData, bookMediaData.leftOuter)((book, media) =>
+              where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or (media.map(_.kind).isNull))
+                select (book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
+                on (book.id === media.map(_.isbn).get))
+          val bookConverter = (b: (Book, BookMedia)) =>
+            new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
-          copy(bookResults, booksOutput, converter)
-        }
-      })
+          copy(bookResults, booksOutput, bookConverter)
 
-      withReadOnlySession(shopDatasource)(shopSession => {
-        using(shopSession){
-          val converter = (c: (Contributor)) =>
+          val contributorConverter = (c: Contributor) =>
             new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
-          copy(from(contributorData)(select(_)), contributorsOutput, converter)
+          copy(from(contributorData)(select(_)), contributorsOutput, contributorConverter)
         }
       })
 
