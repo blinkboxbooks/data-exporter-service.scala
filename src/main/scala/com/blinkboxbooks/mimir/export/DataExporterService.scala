@@ -96,11 +96,10 @@ object DataExporterService extends App with Configuration with StrictLogging wit
               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or (media.map(_.kind).isNull))
                 select (book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
                 on (book.id === media.map(_.isbn).get))
-          val bookConverter = (b: (Book, BookMedia)) => {
-            val res = new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
+          val bookConverter = (b: (Book, BookMedia)) => 
+            new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
-            res
-          }
+
           copy(bookResults, booksOutput, bookConverter, wait = true)
 
           val contributorConverter = (c: Contributor) =>
