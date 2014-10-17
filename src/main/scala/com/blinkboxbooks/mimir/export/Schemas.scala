@@ -69,9 +69,12 @@ object Contributor {
   import java.text.Normalizer
 
   def generateContributorUrl(baseUrl: String, guid: String, fullName: String): Option[String] = {
-    val normalizedName = Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD).toLowerCase().replaceAll(" ","-").replaceAll("[^a-z-]+", "")
+    val normalizedName = Normalizer.normalize(fullName, java.text.Normalizer.Form.NFD)
+      .toLowerCase()
+      .replaceAll(" ", "-")
+      .replaceAll("[^a-z-]+", "")
     val normalizedNameWithDefault = if (normalizedName.isEmpty) "details" else normalizedName
-    Some(Array(baseUrl, guid, normalizedNameWithDefault).mkString("/"))
+    Some(Array(baseUrl, guid, normalizedNameWithDefault).mkString("/").take(255))
   }
 }
 

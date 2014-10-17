@@ -36,4 +36,12 @@ class ContributorTest extends FunSuite {
     val expectedUrl = Some("https://www.blinkboxbooks.com/#!/author/guid/details")
     assert(actualUrl === expectedUrl)
   }
+  
+  test("Deals with a very long author name") {
+    val longAuthorName = "abcdefghij" * 30
+    val actualUrl = Contributor.generateContributorUrl(baseUrl, "guid", longAuthorName)
+    assert(actualUrl.get.size == 255, s"Actual URL: $actualUrl, author name: $longAuthorName")
+    assert(actualUrl.get.startsWith("https://www.blinkboxbooks.com/#!/author/guid/abcdefghijabcdefghij"))
+  }
+
 }
