@@ -5,6 +5,7 @@ import com.blinkbox.books.config.Configuration
 import com.typesafe.scalalogging.slf4j.StrictLogging
 import it.sauronsoftware.cron4j.Scheduler
 import java.sql.Date
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
 import org.apache.commons.dbcp.BasicDataSource
@@ -26,6 +27,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
 
   val batchSize = serviceConfig.getInt("jdbcBatchsize")
   val timeout = serviceConfig.getDuration("jdbcTimeout", TimeUnit.MILLISECONDS).millis
+  val fetchSize = serviceConfig.getInt("fetchSize")
   val authorBaseUrl = serviceConfig.getString("authorBaseUrl")
 
   // Configure datasources for reading and writing.
@@ -35,7 +37,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
 
   if (args.contains("--now")) {
     logger.info("Starting one-off export")
-    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+    runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, fetchSize)
     logger.info("Completed export")
   } else {
     val cronStr = serviceConfig.getString("schedule")
@@ -45,7 +47,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
       override def run() {
         logger.info("Starting scheduled export")
         try {
-          runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout)
+          runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, fetchSize)
           logger.info("Completed scheduled export")
         } catch {
           case e: Exception => logger.error("Failed data export", e)
@@ -60,7 +62,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * Perform all the data export jobs.
    */
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
-    batchSize: Int, timeout: Duration, authorBaseUrl: String = authorBaseUrl) = {
+    batchSize: Int, timeout: Duration, fetchSize: Int, authorBaseUrl: String = authorBaseUrl) = {
 
     implicit val t = timeout
     implicit val b = batchSize
@@ -80,7 +82,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
       }
 
       // Write new snapshots. Copy these sequentially, in the same transaction. 
-      withReadOnlySession(shopDatasource)(shopSession => {
+      withReadOnlySession(shopDatasource, Some(fetchSize))(shopSession => {
         using(shopSession) {
 
           copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
@@ -94,10 +96,12 @@ object DataExporterService extends App with Configuration with StrictLogging wit
               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or (media.map(_.kind).isNull))
                 select (book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
                 on (book.id === media.map(_.isbn).get))
-          val bookConverter = (b: (Book, BookMedia)) =>
-            new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
+          val bookConverter = (b: (Book, BookMedia)) => {
+            val res = new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
-          copy(bookResults, booksOutput, bookConverter)
+            res
+          }
+          copy(bookResults, booksOutput, bookConverter, wait = true)
 
           val contributorConverter = (c: Contributor) =>
             new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
@@ -105,7 +109,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
         }
       })
 
-      withReadOnlySession(clubcardDatasource)(clubcardSession => {
+      withReadOnlySession(clubcardDatasource, Some(fetchSize))(clubcardSession => {
         using(clubcardSession) {
           val clubcardResults =
             from(clubcards, users, clubcardUsers)((clubcard, user, link) =>
@@ -127,24 +131,25 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * batched writes, for performance. The overall copy job is synchronous, in that it will wait for
    * the copying to complete before returning.
    */
-  def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2)(
+  def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
     implicit bufferSize: Int, outputSession: Session, timeout: Duration) = {
 
     logger.info(s"Executing data export to table ${output.name}")
 
-    var count = 0
+    val count = new AtomicLong(0)
     val p = promise[Unit]
+
     val observable = Observable.from(input)
       .map(converter)
       .buffer(bufferSize)
 
     observable.subscribe(
-      entities => using(outputSession) { output.insert(entities); count += entities.size },
+      entities => using(outputSession) { output.insert(entities); count.addAndGet(entities.size) },
       e => { p.failure(e) },
       () => p.success())
 
     Await.result(p.future, timeout)
-    logger.info(s"Completed export of $count rows")
+    logger.info(s"Completed export of ${count.get} rows")
   }
 
   /**

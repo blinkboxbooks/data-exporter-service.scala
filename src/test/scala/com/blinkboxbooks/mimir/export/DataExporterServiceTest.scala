@@ -27,6 +27,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
 
   implicit val timeout = 10.seconds
   implicit val defaultBatchSize = 100
+  val fetchSize = 100
 
   var shopDbSession: Session = _
   var clubcardDbSession: Session = _
@@ -108,7 +109,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout, fetchSize)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -127,7 +128,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkOutputUnchanged()
 
     val thrown = intercept[Exception] {
-      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout)
+      DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, defaultBatchSize, timeout, fetchSize)
     }
     assert(thrown eq ex, s"Should get original exception back, got: $thrown")
 
@@ -287,7 +288,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     val shopDatasource = testDatasource("shop")
     val clubcardDatasource = testDatasource("clubcard")
     val outputDatasource = testDatasource("reporting")
-    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, "https://www.blinkboxbooks.com/#!/author")
+    DataExporterService.runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, fetchSize, "https://www.blinkboxbooks.com/#!/author")
   }
 
   private def initOutputDb() = {

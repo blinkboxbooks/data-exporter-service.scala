@@ -64,9 +64,10 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
   }
 
   "Read only connection" should "be closed after successful action" in new ConnectionFixture {
-    DbUtils.withReadOnlySession(datasource)(fn)
+    DbUtils.withReadOnlySession(datasource, None)(fn)
 
     verify(fn).apply(any[Session])
+    verify(connection).setAutoCommit(false)
     verify(connection).close()
     verifyNoMoreInteractions(fn, connection)
   }
@@ -75,10 +76,11 @@ class DbUtilsTest extends FlatSpec with MockitoSugar {
     val ex = new RuntimeException("Test exception")
     doThrow(ex).when(fn).apply(any[Session])
 
-    val thrown = intercept[Exception] { DbUtils.withReadOnlySession(datasource)(fn) }
+    val thrown = intercept[Exception] { DbUtils.withReadOnlySession(datasource, Some(100))(fn) }
     assert(thrown eq ex)
 
     verify(fn).apply(any[Session])
+    verify(connection).setAutoCommit(false)
     verify(connection).close()
     verifyNoMoreInteractions(fn, connection)
   }
