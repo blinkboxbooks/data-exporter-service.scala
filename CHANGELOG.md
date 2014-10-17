@@ -1,5 +1,15 @@
 # Data Exporter Service Change Log
 
+## 3.0.3 ([#24](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/24) 2014-10-17 16:09:46)
+
+Fix memory usage and too long contributor URLs.
+
+### Bug fixes:
+
+- CP-1944: Enable streaming of query results from input databases, to avoid using a lot of memory when copying large tables.
+- CP-1974: Truncate long generated contributor URLs to avoid potential failure when writing to contributors table.
+
+
 ## 3.0.2 ([#23](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/23) 2014-09-22 15:15:05)
 
 CP-1795 Fixed leaking DB connections
