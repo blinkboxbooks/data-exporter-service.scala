@@ -2,7 +2,7 @@ package com.blinkboxbooks.mimir.export
 
 import com.blinkbox.books.logging.Loggers
 import com.blinkbox.books.config.Configuration
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.StrictLogging
 import it.sauronsoftware.cron4j.Scheduler
 import java.sql.Date
 import java.util.concurrent.atomic.AtomicLong
@@ -15,6 +15,7 @@ import org.squeryl.PrimitiveTypeMode._
 import rx.lang.scala.Observable
 import scala.concurrent.{ Await, promise }
 import scala.concurrent.duration._
+import scala.concurrent.Promise
 
 object DataExporterService extends App with Configuration with StrictLogging with Loggers {
 
@@ -44,7 +45,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
     logger.info(s"Scheduling data export with configuration: $cronStr")
     val scheduler = new Scheduler()
     scheduler.schedule(cronStr, new Runnable() {
-      override def run() {
+      override def run(): Unit = {
         logger.info("Starting scheduled export")
         try {
           runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, fetchSize)
@@ -62,7 +63,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * Perform all the data export jobs.
    */
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
-    batchSize: Int, timeout: Duration, fetchSize: Int, authorBaseUrl: String = authorBaseUrl) = {
+    batchSize: Int, timeout: Duration, fetchSize: Int, authorBaseUrl: String = authorBaseUrl): Unit = {
 
     implicit val t = timeout
     implicit val b = batchSize
@@ -131,21 +132,22 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * the copying to complete before returning.
    */
   def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
-    implicit bufferSize: Int, outputSession: Session, timeout: Duration) = {
+    implicit bufferSize: Int, outputSession: Session, timeout: Duration): Unit = {
 
     logger.info(s"Executing data export to table ${output.name}")
 
     val count = new AtomicLong(0)
-    val p = promise[Unit]
+    val p = Promise[Unit]()
 
     val observable = Observable.from(input)
       .map(converter)
       .buffer(bufferSize)
 
+    // CP-2083: explicitly committing each batch, to avoid very big transactions.
     observable.subscribe(
-      entities => using(outputSession) { output.insert(entities); count.addAndGet(entities.size) },
+      entities => using(outputSession) { output.insert(entities); outputSession.connection.commit(); count.addAndGet(entities.size) },
       e => { p.failure(e) },
-      () => p.success())
+      () => p.success(()))
 
     Await.result(p.future, timeout)
     logger.info(s"Completed export of ${count.get} rows")

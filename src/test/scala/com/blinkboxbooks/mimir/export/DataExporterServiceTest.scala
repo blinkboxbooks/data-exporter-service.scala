@@ -68,7 +68,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     initOutputDb()
   }
 
-  override def afterAll {
+  override def afterAll: Unit = {
     // Closing last connections will drop H2 databases.
     List(shopDbSession, clubcardDbSession, reportingDbSession).foreach(_.close)
   }
@@ -83,7 +83,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     checkSuccessfulExport()
   }
 
-  def checkSuccessfulExport() {
+  def checkSuccessfulExport(): Unit = {
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toSet === booksWithCovers.toSet)
       assert(from(publishersOutput)(select(_)).toSet === publishers.toSet)
@@ -143,7 +143,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     testCopyToTable(100)
   }
 
-  def testCopyToTable(batchSize: Int) {
+  def testCopyToTable(batchSize: Int): Unit = {
     using(reportingDbSession) {
       currencyRatesOutput.deleteWhere(r => 1 === 1)
       DataExporterService.copy(currencyRates, currencyRatesOutput, identity[CurrencyRate])(
@@ -342,13 +342,13 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
     new OutputBook(sourceBook.id, sourceBook.publisherId, 0.2f, sourceBook.publicationDate, sourceBook.title,
       sourceBook.description, sourceBook.languageCode, sourceBook.numberOfSections, coverUrl)
 
-  private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String) {
+  private def insertClubcardForUser(userId: Int, cardId: Int, cardNumber: String): Unit = {
     clubcards.insert(new Clubcard(cardId, cardNumber))
     users.insert(new ClubcardUser(userId, userId.toString))
     clubcardUsers.insert(new ClubcardForUser(cardId, userId))
   }
 
-  private def checkOutputUnchanged() {
+  private def checkOutputUnchanged(): Unit = {
     using(reportingDbSession) {
       assert(from(booksOutput)(select(_)).toList.size == 1)
       assert(from(publishersOutput)(select(_)).toList.size == 1)
@@ -362,7 +362,7 @@ class DataExporterServiceTest extends FunSuite with BeforeAndAfterAll with Befor
   }
 
   /** Create a datasource that points at a named H2 database. */
-  private def testDatasource(name: String) = {
+  private def testDatasource(name: String): BasicDataSource = {
     val datasource = new BasicDataSource
     datasource.setUrl(url(name))
     datasource.setDriverClassName("org.h2.Driver")
