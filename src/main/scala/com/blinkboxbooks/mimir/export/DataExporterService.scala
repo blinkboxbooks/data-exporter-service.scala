@@ -70,20 +70,19 @@ object DataExporterService extends App with Configuration with StrictLogging wit
 
     withSession(outputDatasource)(implicit outputSession => {
 
-      // Write new snapshots. Copy these sequentially, in the same transaction. 
+      // Write new snapshots of all tables.
       withReadOnlySession(shopDatasource, Some(fetchSize))(shopSession => {
         using(shopSession) {
 
-          // Clear old then copy new snapshots.
-          repopulate(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
-          repopulate(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
-          repopulate(from(genreData)(select(_)), genresOutput, identity[Genre])
-          repopulate(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
-          repopulate(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+          syncTable(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
+          syncTable(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
+          syncTable(from(genreData)(select(_)), genresOutput, identity[Genre])
+          syncTable(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
+          syncTable(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
 
           val contributorConverter = (c: Contributor) =>
             new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
-          repopulate(from(contributorData)(select(_)), contributorsOutput, contributorConverter)
+          syncTable(from(contributorData)(select(_)), contributorsOutput, contributorConverter)
 
           val bookResults =
             join(bookData, bookMediaData.leftOuter)((book, media) =>
@@ -93,7 +92,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
           val bookConverter = (b: (Book, BookMedia)) =>
             new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
-          repopulate(bookResults, booksOutput, bookConverter, wait = true)
+          syncTable(bookResults, booksOutput, bookConverter, wait = true)
         }
       })
 
@@ -105,16 +104,16 @@ object DataExporterService extends App with Configuration with StrictLogging wit
                 select (clubcard, user))
           val converter = (cu: (Clubcard, ClubcardUser)) =>
             new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-          repopulate(clubcardResults, userClubcardsOutput, converter)
+          syncTable(clubcardResults, userClubcardsOutput, converter)
         }
       })
     })
   }
 
   /**
-   * Delete the content of the given output table and repopulate it with data from the input.
+   * Delete the content of the given output table and syncTable it with data from the input.
    */
-  def repopulate[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
+  def syncTable[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
     implicit bufferSize: Int, outputSession: Session, timeout: Duration): Unit = {
     clearTable(output)
     copy(input, output, converter)
