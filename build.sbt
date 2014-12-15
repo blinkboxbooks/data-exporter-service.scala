@@ -9,7 +9,7 @@ organization := "com.blinkbox.books.mimir"
 scalaVersion := "2.11.4"
 
 libraryDependencies ++= Seq(
-  "com.blinkbox.books"      %% "common-config"        % "2.2.0",
+  "com.blinkbox.books"      %% "common-config"        % "2.3.0",
   "com.blinkbox.books"      %% "common-scala-test"    % "0.3.0" % "test",
   "org.squeryl"             %% "squeryl"              % "0.9.5-7",
   "com.h2database"           % "h2"                   % "1.3.173" % "test",
@@ -21,6 +21,6 @@ libraryDependencies ++= Seq(
 
 rpmPrepSettings
 
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-encoding", "utf8", "-target:jvm-1.7", "-Xfuture")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-encoding", "utf8", "-target:jvm-1.7", "-Xfatal-warnings", "-Xfuture")
 
 parallelExecution := false
