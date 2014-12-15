@@ -1,5 +1,15 @@
 # Data Exporter Service Change Log
 
+## 3.0.4 ([#25](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/25) 2014-12-15 14:08:15)
+
+CP-2083: Perform updates in smaller transactions
+
+### Improvements:
+
+- Updated dependencies and Scala version, and updated code to match.
+- Changed data exporting code to ensure transactions aren't very big. This sacrifices transactionality in favour of an easier load for the database replication. The table deletion and copying code has been rearranged to minimise any potential impact of a DB error part way through a data export job.
+
+
 ## 3.0.3 ([#24](https://git.mobcastdev.com/Mimir/data-exporter-service/pull/24) 2014-10-17 16:09:46)
 
 Fix memory usage and too long contributor URLs.
