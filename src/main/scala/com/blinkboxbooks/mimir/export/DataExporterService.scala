@@ -2,7 +2,7 @@ package com.blinkboxbooks.mimir.export
 
 import com.blinkbox.books.logging.Loggers
 import com.blinkbox.books.config.Configuration
-import com.typesafe.scalalogging.slf4j.StrictLogging
+import com.typesafe.scalalogging.StrictLogging
 import it.sauronsoftware.cron4j.Scheduler
 import java.sql.Date
 import java.util.concurrent.atomic.AtomicLong
@@ -15,6 +15,7 @@ import org.squeryl.PrimitiveTypeMode._
 import rx.lang.scala.Observable
 import scala.concurrent.{ Await, promise }
 import scala.concurrent.duration._
+import scala.concurrent.Promise
 
 object DataExporterService extends App with Configuration with StrictLogging with Loggers {
 
@@ -44,7 +45,7 @@ object DataExporterService extends App with Configuration with StrictLogging wit
     logger.info(s"Scheduling data export with configuration: $cronStr")
     val scheduler = new Scheduler()
     scheduler.schedule(cronStr, new Runnable() {
-      override def run() {
+      override def run(): Unit = {
         logger.info("Starting scheduled export")
         try {
           runDataExport(shopDatasource, clubcardDatasource, outputDatasource, batchSize, timeout, fetchSize)
@@ -62,49 +63,36 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * Perform all the data export jobs.
    */
   def runDataExport(shopDatasource: DataSource, clubcardDatasource: DataSource, outputDatasource: DataSource,
-    batchSize: Int, timeout: Duration, fetchSize: Int, authorBaseUrl: String = authorBaseUrl) = {
+                    batchSize: Int, timeout: Duration, fetchSize: Int, authorBaseUrl: String = authorBaseUrl): Unit = {
 
     implicit val t = timeout
     implicit val b = batchSize
 
     withSession(outputDatasource)(implicit outputSession => {
 
-      // Clear old snapshots.
-      using(outputSession) {
-        publishersOutput.deleteWhere(r => 1 === 1)
-        booksOutput.deleteWhere(r => 1 === 1)
-        userClubcardsOutput.deleteWhere(r => 1 === 1)
-        currencyRatesOutput.deleteWhere(r => 1 === 1)
-        contributorsOutput.deleteWhere(r => 1 === 1)
-        contributorRolesOutput.deleteWhere(r => 1 === 1)
-        genresOutput.deleteWhere(r => 1 === 1)
-        bookGenresOutput.deleteWhere(r => 1 === 1)
-      }
-
-      // Write new snapshots. Copy these sequentially, in the same transaction. 
+      // Write new snapshots of all tables.
       withReadOnlySession(shopDatasource, Some(fetchSize))(shopSession => {
         using(shopSession) {
 
-          copy(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
-          copy(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
-          copy(from(genreData)(select(_)), genresOutput, identity[Genre])
-          copy(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
-          copy(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+          syncTable(from(publisherData)(select(_)), publishersOutput, identity[Publisher])
+          syncTable(from(mapBookContributorData)(select(_)), contributorRolesOutput, identity[MapBookToContributor])
+          syncTable(from(genreData)(select(_)), genresOutput, identity[Genre])
+          syncTable(from(bookGenreData)(select(_)), bookGenresOutput, identity[MapBookToGenre])
+          syncTable(from(currencyRateData)(select(_)), currencyRatesOutput, identity[CurrencyRate])
+
+          val contributorConverter = (c: Contributor) =>
+            new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
+          syncTable(from(contributorData)(select(_)), contributorsOutput, contributorConverter)
 
           val bookResults =
             join(bookData, bookMediaData.leftOuter)((book, media) =>
               where(media.map(_.kind) === BookMedia.BOOK_COVER_MEDIA_ID or (media.map(_.kind).isNull))
                 select (book, media.getOrElse(new BookMedia(1, book.id, Some(""), BookMedia.BOOK_COVER_MEDIA_ID)))
                 on (book.id === media.map(_.isbn).get))
-          val bookConverter = (b: (Book, BookMedia)) => 
+          val bookConverter = (b: (Book, BookMedia)) =>
             new OutputBook(b._1.id, b._1.publisherId, b._1.discount, b._1.publicationDate, b._1.title, b._1.description.map({ _.take(ReportingSchema.MAX_DESCRIPTION_LENGTH) }),
               b._1.languageCode, b._1.numberOfSections, BookMedia.fullsizeJpgUrl(b._2.url))
-
-          copy(bookResults, booksOutput, bookConverter, wait = true)
-
-          val contributorConverter = (c: Contributor) =>
-            new OutputContributor(c.id, c.fullName, c.firstName, c.lastName, c.guid, BookMedia.fullsizeJpgUrl(c.imageUrl), Contributor.generateContributorUrl(authorBaseUrl, c.guid, c.fullName))
-          copy(from(contributorData)(select(_)), contributorsOutput, contributorConverter)
+          syncTable(bookResults, booksOutput, bookConverter, wait = true)
         }
       })
 
@@ -116,11 +104,23 @@ object DataExporterService extends App with Configuration with StrictLogging wit
                 select (clubcard, user))
           val converter = (cu: (Clubcard, ClubcardUser)) =>
             new UserClubcardInfo(cu._1.cardNumber, Integer.parseInt(cu._2.userId))
-          copy(clubcardResults, userClubcardsOutput, converter)
+          syncTable(clubcardResults, userClubcardsOutput, converter)
         }
       })
     })
   }
+
+  /**
+   * Delete the content of the given output table and syncTable it with data from the input.
+   */
+  def syncTable[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
+    implicit bufferSize: Int, outputSession: Session, timeout: Duration): Unit = {
+    clearTable(output)
+    copy(input, output, converter)
+  }
+
+  /** Delete the content of the given table. */
+  def clearTable[T](table: Table[T])(implicit session: Session) = using(session) { table.deleteWhere(r => 1 === 1) }
 
   /**
    * Copy the results from the given Query to the given output table, converting objects
@@ -131,21 +131,22 @@ object DataExporterService extends App with Configuration with StrictLogging wit
    * the copying to complete before returning.
    */
   def copy[T1, T2](input: Iterable[T1], output: Table[T2], converter: T1 => T2, wait: Boolean = false)(
-    implicit bufferSize: Int, outputSession: Session, timeout: Duration) = {
+    implicit bufferSize: Int, outputSession: Session, timeout: Duration): Unit = {
 
     logger.info(s"Executing data export to table ${output.name}")
 
     val count = new AtomicLong(0)
-    val p = promise[Unit]
+    val p = Promise[Unit]()
 
     val observable = Observable.from(input)
       .map(converter)
       .buffer(bufferSize)
 
+    // CP-2083: explicitly committing each batch, to avoid very big transactions.
     observable.subscribe(
-      entities => using(outputSession) { output.insert(entities); count.addAndGet(entities.size) },
+      entities => using(outputSession) { output.insert(entities); outputSession.connection.commit(); count.addAndGet(entities.size) },
       e => { p.failure(e) },
-      () => p.success())
+      () => p.success(()))
 
     Await.result(p.future, timeout)
     logger.info(s"Completed export of ${count.get} rows")
