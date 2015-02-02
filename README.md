@@ -1,20 +1,17 @@
-# data-exporter-service [![Build Status](http://grisham:8111/app/rest/builds/buildType:%28id:Books_Platform_Mimir_DataExporterService_BuildTestPublish%29/statusIcon)](http://grisham:8111/viewType.html?buildTypeId=Books_Platform_Mimir_DataExporterService_BuildTestPublish&guest=1)
+# data-exporter-service
 
-[ [Release Notes](http://jira.blinkbox.local/confluence/display/REL/Data+Exporter+Service+-+Release+Note) ]
+Service that performs scheduled batch jobs to exports snapshots of shop data, for reporting purposes.
 
-Service that exports snapshots of shop data, for reporting purposes.
+## Implementation
 
-## Requirements
+The service uses [RxJava/RxScala](https://github.com/ReactiveX/RxScala) to stream data from input databases to the output.
 
-The data export service will will periodically update snapshots of shop data such as books, publishers, clubcards etc
-to the reporting database.
-
-A detailed list of data that is required for reporting is 
-given at [this page on Confluence](https://tools.mobcastdev.com/confluence/display/AN/Reporting+DB+requirements+-+Shop+Data), along with suggested priorities.
+The schedule is configured in the `service.dataExporter.schedule` property in the configuration of the service.
+This specifies a cron string that controls how often the service run. The default setting is to run at 3 am nightly.
 
 ## Developer install
 
-To build the service, you need to have [sbt](acceptance-test/data-export-service-test.properties.example) version 0.13 installed.
+To build the service, you need to have sbt version 0.13.6+ installed.
 
 To run the service in development, use the command:
 
@@ -40,26 +37,6 @@ This builds a single JAR file that can be deployed without any other dependencie
 This is built using the sbt plugin [sbt-assembly](https://github.com/sbt/sbt-assembly), see 
 its GitHub page for details on how it works.
 
-You also need to create a configuration file to specify how the service will connect to databases.
-There is an example configuration file in the source directory src/main/resources/data-export-service.properties.example.
-Edit this with the appropriate parameters for your environment, rename it so the file has a ".properties" extension only,
-and put this file on the classpath that's specified when running the service.
-
-If you want to work on the code in an IDE, you'll want to generate the project files for your preferred IDE.
-For example, for Eclipse you would do the following steps:
-
-First ensure that you have [the sbt-eclipse plugin](https://github.com/typesafehub/sbteclipse) installed. Typically, for the sbt 0.13 onwards, that involves adding the following line in a file ~/.sbt/0.13/plugins/plugins.sbt:
-
-```
-addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "2.4.0")
-```
-
-Once you have configured the plugin, you can generate the Eclipse project files using this command:
-
-```
-$ sbt eclipse with-source=true
-```
-
 ## MySQL database creation
 
 To set up the database tables, run the script db/schema.sql 
@@ -71,15 +48,8 @@ $ mysql -u <username> -p <password> reporting < db/schema.sql
 
 ## Running the service
 
-To run the service, you need to provide it with configuration, typically as a properties file.
-An example file is in [src/main/resources/data-exporter-service.properties.example](https://git.mobcastdev.com/Mimir/data-exporter-service/blob/master/src/main/resources/data-exporter-service.properties.example).
-Edit this as necessary, then put it in the directory you'll be running the service from.  
+To run the service from a JAR file, you need to create a configuration file to specify how the service will connect to databases.
+There is an example configuration file in [src/main/resources/application.conf]. 
 
-To start the service, use a command like:
-
-```
-$ java -jar data-export-service-assembly-1.0.jar
-```
-
-Note that the current directory "." is included on the classpath of the built jar file, so
-you can run the service by putting the properties file here.
+This will not be included in the built fat JAR file, so to run it you need to specify the file to use using the `CONFIG_URL` environment
+variable (see the Blinkbox Books common-config library for details).
