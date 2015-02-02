@@ -1,6 +1,6 @@
 # data-exporter-service
 
-Service that performs scheduled batch jobs to exports snapshots of shop data, for reporting purposes.
+Service that performs scheduled batch jobs to export snapshots of shop data, for reporting purposes.
 
 ## Implementation
 
